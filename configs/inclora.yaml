@@ -1,0 +1,26 @@
+method: inclora
+model_name: Qwen/Qwen2.5-1.5B
+
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules:
+    - q_proj
+    - v_proj
+
+training:
+  lr: 1e-3
+  epochs_per_task: 1
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  max_seq_length: 256
+  lambda_1: 0.0
+  lambda_2: 0.0
+  max_samples_per_task: 2000
+  task_order:
+    - ag_news
+    - yelp_review_full
+    - amazon_polarity
+    - dbpedia_14
+    - yahoo_answers_topics
