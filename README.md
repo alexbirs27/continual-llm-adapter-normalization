@@ -1,29 +1,89 @@
 # Continual Adapter Normalization
 
-Improving continual learning for Large Language Models (LLMs) through adapter-based methods that reduce catastrophic forgetting by constraining update directions with respect to previous tasks.
+Continual learning for LLMs through adapter-based methods that reduce catastrophic forgetting by constraining update directions with respect to previous tasks.
 
-## Overview
+## Methods
 
-This repository explores adapter-based continual learning strategies that:
+- **IncLoRA** (baseline): One LoRA adapter per task, freeze previous ones, no constraints. Each task gets its own isolated adapter — zero forgetting by design, but no knowledge transfer.
+- **OLoRA**: Same structure but with an orthogonality loss that encourages new adapter subspaces to be orthogonal to past ones, enabling knowledge sharing while reducing interference.
 
-- Restrict current task updates relative to past task subspaces
-- Reduce forgetting while preserving plasticity
-- Analyze the geometric properties of task updates
-- Study the impact of hyperparameters (rank, regularization strength, etc.)
+Both methods use [minLoRA](https://github.com/cccntu/minLoRA)'s `torch.nn.utils.parametrize` approach for clean LoRA injection.
 
-## Key Ideas
+## Setup
 
-- Orthogonal or constrained adapter updates
-- Normalization of past adapters
-- Subspace-aware learning dynamics
-- Stability-plasticity tradeoff analysis
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Goals
+## Usage
 
-- Implement mechanisms to mitigate forgetting
-- Evaluate performance across sequential tasks
-- Analyze update geometry and adapter interactions
+```bash
+# Run IncLoRA
+python3 run.py --config configs/inclora.yaml
 
-## Status
+# Run OLoRA
+python3 run.py --config configs/olora.yaml
 
-Work in progress.
+# Custom output directory
+python3 run.py --config configs/olora.yaml --output_dir results/my_experiment
+```
+
+Results are saved as JSON in the output directory.
+
+## Project Structure
+
+```
+src/
+  methods/
+    inclora.py              # IncLoRA: multi-adapter baseline
+    olora.py                # OLoRA: orthogonal LoRA with dual matrices
+  training/
+    continual_trainer.py    # Sequential training loop, evaluation, metrics
+  data/
+    datasets.py             # Load & preprocess 5 CL benchmark datasets
+  utils/
+    config.py               # Config dataclasses and YAML loader
+  minlora/                  # minLoRA library (LoRA via parametrize)
+configs/
+  inclora.yaml              # IncLoRA hyperparameters
+  olora.yaml                # OLoRA hyperparameters
+run.py                      # Main entry point
+```
+
+## Datasets
+
+5 text classification benchmarks from HuggingFace, trained sequentially:
+
+1. AG News (4 classes)
+2. Yelp Review Full (5 classes)
+3. Amazon Polarity (2 classes)
+4. DBpedia 14 (14 classes)
+5. Yahoo Answers Topics (10 classes)
+
+## Configuration
+
+Key hyperparameters in the YAML configs:
+
+| Parameter | IncLoRA | OLoRA |
+|-----------|---------|-------|
+| LoRA rank | 8 | 8 |
+| LoRA alpha | 32 | 32 |
+| Learning rate | 1e-3 | 1e-3 |
+| Epochs per task | 1 | 1 |
+| Batch size | 2 | 2 |
+| Grad accumulation | 4 | 4 |
+| Max seq length | 256 | 256 |
+| lambda_1 (orth. loss) | 0.0 | 0.5 |
+| Target modules | q_proj, v_proj | q_proj, v_proj |
+
+## Metrics
+
+- **ACC**: Average accuracy across all tasks after training on the last task
+- **BWT**: Backward transfer — measures how much learning new tasks affects performance on old ones
+- **R[i][j] matrix**: Accuracy on task j after training up to task i
+
+## Base Model
+
+Qwen2.5-1.5B (causal LM, loaded in bfloat16 with gradient checkpointing for memory efficiency).
