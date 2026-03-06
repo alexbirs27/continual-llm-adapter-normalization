@@ -9,7 +9,7 @@ from functools import partial
 
 from torch import nn
 
-from src.minlora import (
+from src.minlora.model import (
     LoRAParametrization,
     add_lora_by_name,
     remove_lora,
