@@ -1,221 +1,166 @@
 """OLoRA: Orthogonal Low-Rank Adaptation for continual learning.
 
-Implements dual LoRA matrices per target module:
+Extends minLoRA's LoRAParametrization (copied into src/minlora) with dual matrices:
   - lora_A / lora_B: frozen, accumulated from past tasks
   - loranew_A / loranew_B: trainable, current task
 
-After each task, loranew is concatenated into lora and re-initialized.
-An orthogonality loss encourages the new adapter subspace to be orthogonal
-to the accumulated past subspace.
+Uses the exact same torch.nn.utils.parametrize mechanism as minLoRA.
 """
 
-import copy
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
+import torch.nn.utils.parametrize as parametrize
+
+from src.minlora.model import LoRAParametrization
 
 
-class OLoRALayer(nn.Module):
-    """Replaces a single linear layer with dual LoRA decomposition."""
+class OLoRAParametrization(LoRAParametrization):
+    """Extends minLoRA's LoRAParametrization with dual matrices for O-LoRA."""
 
-    def __init__(self, original_layer, r, alpha, dropout):
-        super().__init__()
-        self.original = original_layer
-        for param in self.original.parameters():
-            param.requires_grad = False
+    def __init__(self, fan_in, fan_out, fan_in_fan_out=False, rank=4, lora_dropout_p=0.0, lora_alpha=1):
+        # Don't call super().__init__ — we set everything up ourselves
+        nn.Module.__init__(self)
+        self.swap = (lambda x: (x[1], x[0])) if fan_in_fan_out else (lambda x: x)
+        self.rank = rank
+        self.lora_alpha = lora_alpha
+        self.scaling = lora_alpha / rank
 
-        in_features = original_layer.in_features
-        out_features = original_layer.out_features
-        self.r = r
-        self.scaling = alpha / r
+        # Past task matrices (frozen) — empty until after first task
+        self.has_past = False
+        self.lora_A = nn.Parameter(torch.empty(0), requires_grad=False)
+        self.lora_B = nn.Parameter(torch.empty(0), requires_grad=False)
 
-        # Past task matrices (frozen) — None until after first task
-        self.lora_A = None
-        self.lora_B = None
+        # Current task matrices (trainable) — same init as minLoRA
+        self.loranew_A = nn.Parameter(torch.zeros(self.swap((rank, fan_in))))
+        self.loranew_B = nn.Parameter(torch.zeros(self.swap((fan_out, rank))))
+        nn.init.kaiming_uniform_(self.loranew_A, a=math.sqrt(5))
 
-        # Current task matrices (trainable)
-        self.loranew_A = nn.Linear(in_features, r, bias=False)
-        self.loranew_B = nn.Linear(r, out_features, bias=False)
-        self.lora_dropout = nn.Dropout(dropout)
+        self.lora_dropout = nn.Dropout(p=lora_dropout_p) if lora_dropout_p > 0 else lambda x: x
+        self.dropout_fn = self._dropout if lora_dropout_p > 0 else lambda x: x
+        self.register_buffer("lora_dropout_mask", torch.ones(self.swap((1, fan_in)), dtype=self.loranew_A.dtype))
 
-        # Initialize: A with Kaiming, B with zeros (standard LoRA init)
-        nn.init.kaiming_uniform_(self.loranew_A.weight, a=math.sqrt(5))
-        nn.init.zeros_(self.loranew_B.weight)
+    def _dropout(self, A):
+        return A * self.lora_dropout(self.lora_dropout_mask)
 
-    def forward(self, x):
-        result = self.original(x)
-
+    def forward(self, X):
         # Past contribution (frozen)
-        if self.lora_A is not None:
-            past = self.lora_dropout(x)
-            past = self.lora_A(past)
-            past = self.lora_B(past)
-            result = result + past * self.scaling
-
+        if self.has_past:
+            X = X + torch.matmul(*self.swap((self.lora_B, self.lora_A))).view(X.shape) * self.scaling
         # Current contribution (trainable)
-        current = self.lora_dropout(x)
-        current = self.loranew_A(current)
-        current = self.loranew_B(current)
-        result = result + current * self.scaling
-
-        return result
+        X = X + torch.matmul(*self.swap((self.loranew_B, self.dropout_fn(self.loranew_A)))).view(X.shape) * self.scaling
+        return X
 
     def concatenate_and_reinit(self):
         """After a task: merge loranew into lora, freeze, re-init loranew."""
-        in_features = self.loranew_A.in_features
-        out_features = self.loranew_B.out_features
-
         with torch.no_grad():
-            if self.lora_A is None:
-                # First task: move loranew -> lora
-                self.lora_A = copy.deepcopy(self.loranew_A)
-                self.lora_B = copy.deepcopy(self.loranew_B)
+            if not self.has_past:
+                new_A = self.loranew_A.data.clone()
+                new_B = self.loranew_B.data.clone()
             else:
-                # Concatenate: lora_A grows [r_sum, d] -> [r_sum+r, d]
-                new_A_weight = torch.cat(
-                    [self.lora_A.weight, self.loranew_A.weight], dim=0
-                )
-                new_B_weight = torch.cat(
-                    [self.lora_B.weight, self.loranew_B.weight], dim=1
-                )
+                # Concat along rank dimension
+                new_A = torch.cat([self.lora_A.data, self.loranew_A.data], dim=0)
+                new_B = torch.cat([self.lora_B.data, self.loranew_B.data], dim=1)
 
-                r_new = new_A_weight.shape[0]
-                self.lora_A = nn.Linear(in_features, r_new, bias=False)
-                self.lora_A.weight.copy_(new_A_weight)
-
-                self.lora_B = nn.Linear(r_new, out_features, bias=False)
-                self.lora_B.weight.copy_(new_B_weight)
-
-            # Freeze past matrices
-            self.lora_A.requires_grad_(False)
-            self.lora_B.requires_grad_(False)
+            self.lora_A = nn.Parameter(new_A, requires_grad=False)
+            self.lora_B = nn.Parameter(new_B, requires_grad=False)
+            self.has_past = True
 
         # Re-init loranew for next task
-        nn.init.kaiming_uniform_(self.loranew_A.weight, a=math.sqrt(5))
-        nn.init.zeros_(self.loranew_B.weight)
+        nn.init.kaiming_uniform_(self.loranew_A, a=math.sqrt(5))
+        nn.init.zeros_(self.loranew_B)
+
+    @classmethod
+    def from_linear(cls, layer, rank=4, lora_dropout_p=0.0, lora_alpha=1):
+        fan_out, fan_in = layer.weight.shape
+        return cls(
+            fan_in, fan_out, fan_in_fan_out=False, rank=rank, lora_dropout_p=lora_dropout_p, lora_alpha=lora_alpha
+        )
 
 
-def _get_submodule(model, target_name):
-    """Get a submodule by dot-separated path."""
-    atoms = target_name.split(".")
-    mod = model
-    for atom in atoms:
-        mod = getattr(mod, atom)
-    return mod
-
-
-def _set_submodule(model, target_name, new_module):
-    """Set a submodule by dot-separated path."""
-    atoms = target_name.split(".")
-    parent = model
-    for atom in atoms[:-1]:
-        parent = getattr(parent, atom)
-    setattr(parent, atoms[-1], new_module)
+def add_olora_by_name(model, target_module_names, olora_config):
+    """Add OLoRA parametrization to specific layers, same pattern as minLoRA's add_lora_by_name."""
+    for name, layer in model.named_modules():
+        if any(m in name for m in target_module_names):
+            if type(layer) in olora_config:
+                for attr_name, parametrization_fn in olora_config[type(layer)].items():
+                    parametrize.register_parametrization(layer, attr_name, parametrization_fn(layer))
 
 
 class OLoRA:
-    """Orthogonal LoRA for continual learning.
-
-    Injects OLoRALayer modules into the base model at target_modules.
-    Manages the dual-matrix lifecycle across tasks.
-    """
+    """Orthogonal LoRA for continual learning."""
 
     def __init__(self, base_model, lora_config, lambda_1=0.5, lambda_2=0.0):
         self.model = base_model
         self.lambda_1 = lambda_1
         self.lambda_2 = lambda_2
-        self.olora_layers = {}
 
         # Freeze base model
         for param in self.model.parameters():
             param.requires_grad = False
 
-        # Inject OLoRA layers
-        self._inject_olora_layers(
-            r=lora_config.r,
-            alpha=lora_config.alpha,
-            dropout=lora_config.dropout,
-            target_modules=lora_config.target_modules,
-        )
+        # Inject OLoRA parametrizations (same pattern as minLoRA)
+        olora_config = {
+            nn.Linear: {
+                "weight": partial(
+                    OLoRAParametrization.from_linear,
+                    rank=lora_config.r,
+                    lora_dropout_p=lora_config.dropout,
+                    lora_alpha=lora_config.alpha,
+                ),
+            },
+        }
+        add_olora_by_name(self.model, list(lora_config.target_modules), olora_config)
 
-    def _inject_olora_layers(self, r, alpha, dropout, target_modules):
-        """Replace target linear layers with OLoRALayer wrappers."""
-        replacements = []
-        for name, module in self.model.named_modules():
-            # Check if this module's last name component matches a target
-            short_name = name.split(".")[-1] if "." in name else name
-            if short_name in target_modules and isinstance(module, nn.Linear):
-                replacements.append((name, module))
-
-        for name, module in replacements:
-            olora_layer = OLoRALayer(module, r, alpha, dropout)
-            olora_layer.to(module.weight.device)
-            _set_submodule(self.model, name, olora_layer)
-            self.olora_layers[name] = olora_layer
-
+        # Collect all OLoRA layers
+        self.olora_layers = [m for m in self.model.modules() if isinstance(m, OLoRAParametrization)]
         print(f"Injected OLoRA into {len(self.olora_layers)} layers")
 
     def prepare_task(self, task_id):
-        """No special prep needed — loranew is always ready."""
         pass
 
     def get_trainable_params(self):
-        """Return only the loranew parameters (trainable)."""
         params = []
-        for layer in self.olora_layers.values():
-            params.extend(layer.loranew_A.parameters())
-            params.extend(layer.loranew_B.parameters())
+        for layer in self.olora_layers:
+            params.append(layer.loranew_A)
+            params.append(layer.loranew_B)
         return params
 
     def compute_orthogonal_loss(self):
-        """L_orth = sum over layers of ||lora_A^T @ loranew_A||_1.
-
-        Encourages the new adapter subspace to be orthogonal to past subspaces.
-        lora_A.weight shape: [r_past, in_features]
-        loranew_A.weight shape: [r, in_features]
-        Product shape: [r_past, r]
-        """
-        loss = torch.tensor(0.0, device=next(iter(self.olora_layers.values())).loranew_A.weight.device)
-        for layer in self.olora_layers.values():
-            if layer.lora_A is not None:
-                # [r_past, in_features] @ [in_features, r] -> [r_past, r]
-                product = layer.lora_A.weight @ layer.loranew_A.weight.T
+        loss = torch.tensor(0.0, device=self.olora_layers[0].loranew_A.device)
+        for layer in self.olora_layers:
+            if layer.has_past:
+                product = layer.lora_A @ layer.loranew_A.T
                 loss = loss + torch.abs(product).sum()
         return loss
 
     def compute_l2_loss(self):
-        """L2 regularization on loranew parameters."""
-        loss = torch.tensor(0.0, device=next(iter(self.olora_layers.values())).loranew_A.weight.device)
-        for layer in self.olora_layers.values():
-            loss = loss + torch.norm(layer.loranew_A.weight, p=2)
-            loss = loss + torch.norm(layer.loranew_B.weight, p=2)
+        loss = torch.tensor(0.0, device=self.olora_layers[0].loranew_A.device)
+        for layer in self.olora_layers:
+            loss = loss + torch.norm(layer.loranew_A, p=2)
+            loss = loss + torch.norm(layer.loranew_B, p=2)
         return loss
 
     def get_loss(self, input_ids, attention_mask, labels):
-        """CE loss + orthogonality loss + L2 regularization."""
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels,
         )
         total_loss = outputs.loss
-
         if self.lambda_1 > 0:
             total_loss = total_loss + self.lambda_1 * self.compute_orthogonal_loss()
-
         if self.lambda_2 > 0:
             total_loss = total_loss + self.lambda_2 * self.compute_l2_loss()
-
         return total_loss
 
     def after_task(self, task_id):
-        """Concatenate loranew into lora, freeze, re-init loranew."""
-        for layer in self.olora_layers.values():
+        for layer in self.olora_layers:
             layer.concatenate_and_reinit()
 
     def set_eval_adapter(self, task_id):
-        """OLoRA uses a single accumulated model — no adapter switching needed."""
         pass
 
     def train_mode(self):

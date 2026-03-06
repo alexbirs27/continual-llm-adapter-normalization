@@ -1,44 +1,66 @@
-"""IncLoRA: Incremental LoRA — one adapter per task, freeze previous ones."""
+"""IncLoRA: Incremental LoRA — one adapter per task, freeze previous ones.
 
-import torch
-from peft import get_peft_model, LoraConfig, TaskType
+Uses minLoRA's parametrization approach (copied into src/minlora).
+Each task gets a fresh LoRA, which is saved after training.
+At eval time, the correct task's LoRA weights are loaded.
+"""
+
+from functools import partial
+
+from torch import nn
+
+from src.minlora import (
+    LoRAParametrization,
+    add_lora_by_name,
+    remove_lora,
+)
+from src.minlora.utils import (
+    get_lora_params,
+    get_lora_state_dict,
+    load_multiple_lora,
+    select_lora,
+)
 
 
 class IncLoRA:
-    """Multi-adapter baseline using HuggingFace PEFT.
-
-    For each new task, a fresh LoRA adapter is added and set as active.
-    Previous adapters are frozen (PEFT handles this via set_adapter).
-    At evaluation time, the adapter for the specific task is activated.
-    """
+    """Multi-adapter baseline using minLoRA parametrization."""
 
     def __init__(self, base_model, lora_config):
         self.model = base_model
-        self.peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM,
-            r=lora_config.r,
-            lora_alpha=lora_config.alpha,
-            lora_dropout=lora_config.dropout,
-            target_modules=list(lora_config.target_modules),
-        )
-        self.adapters = []
+        self.r = lora_config.r
+        self.alpha = lora_config.alpha
+        self.dropout = lora_config.dropout
+        self.target_modules = list(lora_config.target_modules)
+        self.saved_lora_states = []
+
+        # Freeze base model
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+    def _make_lora_config(self):
+        return {
+            nn.Linear: {
+                "weight": partial(
+                    LoRAParametrization.from_linear,
+                    rank=self.r,
+                    lora_dropout_p=self.dropout,
+                    lora_alpha=self.alpha,
+                ),
+            },
+        }
 
     def prepare_task(self, task_id):
-        """Add a new LoRA adapter for this task."""
-        name = f"task_{task_id}"
-        if task_id == 0:
-            self.model = get_peft_model(self.model, self.peft_config, adapter_name=name)
-        else:
-            self.model.add_adapter(name, self.peft_config)
-            self.model.set_adapter(name)
-        self.adapters.append(name)
+        """Add fresh LoRA parametrization for this task."""
+        try:
+            remove_lora(self.model)
+        except Exception:
+            pass
+        add_lora_by_name(self.model, self.target_modules, lora_config=self._make_lora_config())
 
     def get_trainable_params(self):
-        """Return parameters that require grad (current adapter only)."""
-        return [p for p in self.model.parameters() if p.requires_grad]
+        return list(get_lora_params(self.model))
 
     def get_loss(self, input_ids, attention_mask, labels):
-        """Standard causal LM loss."""
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -47,14 +69,20 @@ class IncLoRA:
         return outputs.loss
 
     def after_task(self, task_id):
-        """Freeze current adapter by disabling its gradients."""
-        for name, param in self.model.named_parameters():
-            if f"task_{task_id}" in name:
-                param.requires_grad = False
+        """Save current LoRA state dict, then remove LoRA from model."""
+        state = get_lora_state_dict(self.model)
+        self.saved_lora_states.append(state)
+        remove_lora(self.model)
 
     def set_eval_adapter(self, task_id):
-        """Activate the adapter for a specific task (for evaluation)."""
-        self.model.set_adapter(f"task_{task_id}")
+        """Load all saved LoRAs and select the one for task_id."""
+        try:
+            remove_lora(self.model)
+        except Exception:
+            pass
+        add_lora_by_name(self.model, self.target_modules, lora_config=self._make_lora_config())
+        load_multiple_lora(self.model, self.saved_lora_states[:task_id + 1])
+        select_lora(self.model, task_id)
 
     def train_mode(self):
         self.model.train()
