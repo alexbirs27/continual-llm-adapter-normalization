@@ -104,7 +104,6 @@ def add_olora_by_name(model, target_module_names, olora_config):
 
 
 class OLoRA:
-    """Orthogonal LoRA for continual learning."""
 
     def __init__(self, base_model, lora_config, lambda_1=0.5, lambda_2=0.0):
         self.model = base_model
