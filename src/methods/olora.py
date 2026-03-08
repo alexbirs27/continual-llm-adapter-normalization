@@ -28,12 +28,12 @@ class OLoRAParametrization(LoRAParametrization):
         self.lora_alpha = lora_alpha
         self.scaling = lora_alpha / rank
 
-        # Past task matrices (frozen) — empty until after first task
+        # Past task matrices (frozen)
         self.has_past = False
         self.lora_A = nn.Parameter(torch.empty(0), requires_grad=False)
         self.lora_B = nn.Parameter(torch.empty(0), requires_grad=False)
 
-        # Current task matrices (trainable) — same init as minLoRA
+        # Current task matrices (trainable)
         self.loranew_A = nn.Parameter(torch.zeros(self.swap((rank, fan_in))))
         self.loranew_B = nn.Parameter(torch.zeros(self.swap((fan_out, rank))))
         nn.init.kaiming_uniform_(self.loranew_A, a=math.sqrt(5))
@@ -55,6 +55,13 @@ class OLoRAParametrization(LoRAParametrization):
 
     def concatenate_and_reinit(self):
         """After a task: merge loranew into lora, freeze, re-init loranew."""
+        # NOTE: Deviation from O-LoRA (Wang et al., 2023a) Eq. 9
+        # Instead of merging updates into W_init (W_init := W_init + AB), we maintain 
+        # an explicit cumulative subspace in lora_A/B.
+        # 1. Subspace Access: Merging is irreversible; keeping them separate allows 
+        #    post-hoc analysis of task-specific directions
+        # 2. Orthogonality Calculation: Access to the raw A_i matrices is required 
+        #    to compute the L_orth penalty (A_i^T @ A_new)
         with torch.no_grad():
             if not self.has_past:
                 new_A = self.loranew_A.data.clone()
@@ -77,6 +84,13 @@ class OLoRAParametrization(LoRAParametrization):
         fan_out, fan_in = layer.weight.shape
         return cls(
             fan_in, fan_out, fan_in_fan_out=False, rank=rank, lora_dropout_p=lora_dropout_p, lora_alpha=lora_alpha
+        )
+    
+    @classmethod
+    def from_embedding(cls, layer, rank=4, lora_dropout_p=0.0, lora_alpha=1):
+        fan_in, fan_out = layer.weight.shape
+        return cls(
+            fan_in, fan_out, fan_in_fan_out=True, rank=rank, lora_dropout_p=lora_dropout_p, lora_alpha=lora_alpha
         )
 
 
@@ -106,6 +120,14 @@ class OLoRA:
             nn.Linear: {
                 "weight": partial(
                     OLoRAParametrization.from_linear,
+                    rank=lora_config.r,
+                    lora_dropout_p=lora_config.dropout,
+                    lora_alpha=lora_config.alpha,
+                ),
+            },
+            nn.Embedding: {
+                "weight": partial(
+                    OLoRAParametrization.from_embedding,
                     rank=lora_config.r,
                     lora_dropout_p=lora_config.dropout,
                     lora_alpha=lora_config.alpha,
