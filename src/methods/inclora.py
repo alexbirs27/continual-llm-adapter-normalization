@@ -47,6 +47,14 @@ class IncLoRA:
                     lora_alpha=self.alpha,
                 ),
             },
+            nn.Embedding: {
+                "weight": partial(
+                    LoRAParametrization.from_embedding,
+                    rank=self.r,
+                    lora_dropout_p=self.dropout,
+                    lora_alpha=self.alpha,
+                ),
+            },
         }
 
     def prepare_task(self, task_id):
