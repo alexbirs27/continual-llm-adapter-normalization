@@ -37,16 +37,18 @@ class ELLAParametrization(LoRAParametrization):
         """Returns the current low-rank update matrix Delta W = AB"""
         return torch.matmul(*self.swap((self.lora_B, self.dropout_fn(self.lora_A)))) * self.scaling
 
-    def forward(self, X):        
-        # Base + Past Tasks (Frozen) + Current Task (Trainable)
+    def forward(self, X):
+        # X is the weight matrix W (from parametrize), not an input activation
+        # W_new = W + W_past + B @ A * scaling
         delta_w_current = self.get_delta_w()
         total_delta_w = self.W_past + delta_w_current
-        return X + (X @ total_delta_w.t()).view(X.shape)
+        return X + total_delta_w.view(X.shape)
 
     @torch.no_grad()
     def update_past_signal(self):
         """Accumulate current update into W_past and reset for next task"""
-        current_delta = self.get_delta_w()
+        # Use clean delta (no dropout) for accumulation
+        current_delta = torch.matmul(*self.swap((self.lora_B, self.lora_A))) * self.scaling
         self.W_past.add_(current_delta)
         
         # Re-initialize for the new task to maintain plasticity
@@ -74,7 +76,9 @@ def add_ella_by_name(model, target_module_names, ella_config):
         if any(m in name for m in target_module_names):
             if type(layer) in ella_config:
                 for attr_name, parametrization_fn in ella_config[type(layer)].items():
-                    parametrize.register_parametrization(layer, attr_name, parametrization_fn(layer))
+                    param = parametrization_fn(layer)
+                    param = param.to(layer.weight.device, dtype=layer.weight.dtype)
+                    parametrize.register_parametrization(layer, attr_name, param)
 
 class ELLA:    
 
@@ -139,10 +143,15 @@ class ELLA:
         ella_penalty = self.compute_ella_loss()
         return task_loss + self.lambd * ella_penalty
 
-    def after_task(self):        
+    def prepare_task(self, task_id):
+        """No special prep needed — lora_A/B are always ready."""
+        pass
+
+    def after_task(self, task_id):
+        """Accumulate current update into W_past and re-init."""
         for layer in self.ella_layers:
             layer.update_past_signal()
-    
+
     def set_eval_adapter(self, task_id):
         pass
 
