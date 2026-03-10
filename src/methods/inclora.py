@@ -7,6 +7,7 @@ At eval time, the correct task's LoRA weights are loaded.
 
 from functools import partial
 
+import torch
 from torch import nn
 
 from src.minlora.model import (
@@ -32,6 +33,7 @@ class IncLoRA:
         self.dropout = lora_config.dropout
         self.target_modules = list(lora_config.target_modules)
         self.saved_lora_states = []
+        self.task_deltas = []
 
         # Freeze base model
         for param in self.model.parameters():
@@ -80,7 +82,21 @@ class IncLoRA:
         """Save current LoRA state dict, then remove LoRA from model."""
         state = get_lora_state_dict(self.model)
         self.saved_lora_states.append(state)
+        self._save_task_deltas(state)
         remove_lora(self.model)
+
+    def _save_task_deltas(self, state):
+        As = sorted([k for k in state if k.endswith("lora_A")])
+        Bs = sorted([k for k in state if k.endswith("lora_B")])
+        scaling = self.alpha / self.r
+        deltas = []
+        for a_key, b_key in zip(As, Bs):
+            dw = (state[b_key] @ state[a_key]).cpu() * scaling
+            deltas.append(dw)
+        self.task_deltas.append(deltas)
+
+    def get_task_deltas(self):
+        return self.task_deltas
 
     def set_eval_adapter(self, task_id):
         """Load all saved LoRAs and select the one for task_id."""

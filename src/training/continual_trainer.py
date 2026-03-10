@@ -5,6 +5,8 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from src.utils.analysis import compute_pairwise_orthogonality, print_orthogonality_report
+
 
 class ContinualTrainer:
     """Trains a continual learning method on a sequence of tasks.
@@ -40,6 +42,14 @@ class ContinualTrainer:
 
         metrics = self.compute_metrics()
         self._print_final_metrics(metrics)
+
+        if hasattr(self.method, "get_task_deltas"):
+            task_names = self.config.task_order[:len(self.results_matrix)]
+            orth = compute_pairwise_orthogonality(self.method.get_task_deltas(), task_names)
+            print_orthogonality_report(orth, task_names)
+            if orth:
+                metrics["orthogonality"] = orth["mean_off_diagonal"]
+
         return self.results_matrix, metrics
 
     def _train_single_task(self, task_id, task_name):

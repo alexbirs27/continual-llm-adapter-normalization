@@ -84,7 +84,8 @@ class ELLA:
 
     def __init__(self, base_model, lora_config, lambd=0.1):
         self.model = base_model
-        self.lambd = lambd # Regularization strength
+        self.lambd = lambd
+        self.task_deltas = []
 
         # Freeze base model
         for param in self.model.parameters():
@@ -144,13 +145,22 @@ class ELLA:
         return task_loss + self.lambd * ella_penalty
 
     def prepare_task(self, task_id):
-        """No special prep needed — lora_A/B are always ready."""
         pass
 
     def after_task(self, task_id):
-        """Accumulate current update into W_past and re-init."""
+        self._save_task_deltas()
         for layer in self.ella_layers:
             layer.update_past_signal()
+
+    def _save_task_deltas(self):
+        deltas = []
+        for layer in self.ella_layers:
+            dw = torch.matmul(*layer.swap((layer.lora_B, layer.lora_A))).detach().cpu() * layer.scaling
+            deltas.append(dw)
+        self.task_deltas.append(deltas)
+
+    def get_task_deltas(self):
+        return self.task_deltas
 
     def set_eval_adapter(self, task_id):
         pass
