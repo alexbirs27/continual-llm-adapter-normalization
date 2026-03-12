@@ -124,15 +124,18 @@ class ELLA:
 
     def compute_ella_loss(self):
         """
-        Calculates the alignment penalty to discourage overlap in high-energy 
+        Calculates the alignment penalty to discourage overlap in high-energy
         task-specific directions.
         """
-        loss = 0.0
+        loss = torch.tensor(0.0, device=self.ella_layers[0].W_past.device, dtype=torch.float32)
         for layer in self.ella_layers:
-            delta_w = layer.get_delta_w()
+            delta_w = layer.get_delta_w().float()
+            w_past = layer.W_past.float()
             # Element-wise product of current update and past energy
-            alignment = delta_w * layer.W_past 
-            loss += torch.norm(alignment, p='fro')**2
+            alignment = delta_w * w_past
+            penalty = torch.norm(alignment, p='fro')**2
+            # Clamp to prevent nan from overflow
+            loss = loss + torch.clamp(penalty, max=1e6)
         return loss
 
     def get_loss(self, input_ids, attention_mask, labels):

@@ -13,20 +13,44 @@ class ContinualTrainer:
     on task j after training on task i.
     """
 
-    def __init__(self, method, datasets, training_config, tokenizer):
+    def __init__(self, method, datasets, training_config, tokenizer, dev_mode=False):
         self.method = method
         self.datasets = datasets
         self.config = training_config
         self.tokenizer = tokenizer
         self.results_matrix = []
+        self.baselines = []  # zero-shot accuracy per task (no training at all)
+        self.pre_train_acc = []  # R[i-1][i]: accuracy on task i before training on it
         self.device = next(method.model.parameters()).device
+        self.eval_split = "dev" if dev_mode else "eval"
+
+    def _compute_baselines(self):
+        """Evaluate all tasks zero-shot (no adapter training) for FWT baseline."""
+        print("\nComputing zero-shot baselines...")
+        self.method.eval_mode()
+        for task_name in self.config.task_order:
+            # Force dataset loading
+            _ = self.datasets[task_name]
+            acc = self._evaluate_task(task_name)
+            self.baselines.append(acc)
+            print(f"  {task_name}: {acc:.4f}")
+        self.method.train_mode()
 
     def train_all_tasks(self):
         """Train on all tasks sequentially, evaluating after each."""
+        self._compute_baselines()
+
         for task_id, task_name in enumerate(self.config.task_order):
             print(f"\n{'='*60}")
             print(f"Task {task_id}: {task_name}")
             print(f"{'='*60}")
+
+            # Evaluate this task BEFORE training on it (for FWT)
+            if task_id > 0:
+                self.method.eval_mode()
+                pre_acc = self._evaluate_task(task_name)
+                self.pre_train_acc.append(pre_acc)
+                print(f"  Pre-training accuracy on {task_name}: {pre_acc:.4f}")
 
             self.method.prepare_task(task_id)
             self._train_single_task(task_id, task_name)
@@ -44,7 +68,7 @@ class ContinualTrainer:
 
     def _train_single_task(self, task_id, task_name):
         """Train on a single task."""
-        train_ds, _ = self.datasets[task_name]
+        train_ds, _, _ = self.datasets[task_name]
         dataloader = DataLoader(
             train_ds,
             batch_size=self.config.batch_size,
@@ -109,7 +133,7 @@ class ContinualTrainer:
         For causal LM classification, we check if the model's next-token
         prediction at the 'Label:' position matches the correct label token.
         """
-        _, eval_ds = self.datasets[task_name]
+        eval_ds = self.datasets.get_split(task_name, self.eval_split)
         from src.data.datasets import DATASET_REGISTRY
 
         cfg = DATASET_REGISTRY[task_name]
@@ -166,9 +190,9 @@ class ContinualTrainer:
         return accuracy
 
     def compute_metrics(self):
-        """Compute ACC (average final accuracy) and BWT (backward transfer)."""
+        """Compute ACC, BWT, and FWT."""
         if not self.results_matrix:
-            return {"acc": 0.0, "bwt": 0.0}
+            return {"acc": 0.0, "bwt": 0.0, "fwt": 0.0}
 
         n = len(self.results_matrix)
         last_row = self.results_matrix[-1]
@@ -186,7 +210,19 @@ class ContinualTrainer:
                 bwt_sum += last_row[j] - self.results_matrix[j][j]
             bwt = bwt_sum / (n - 1)
 
-        return {"acc": acc, "bwt": bwt}
+        # FWT: forward transfer
+        # FWT = (1/(n-1)) * sum_{i=1}^{n-1} (R[i-1][i] - baseline[i])
+        # pre_train_acc[i-1] = accuracy on task i after training tasks 0..i-1
+        # baselines[i] = zero-shot accuracy on task i (no training)
+        if n <= 1 or not self.baselines or not self.pre_train_acc:
+            fwt = 0.0
+        else:
+            fwt_sum = 0.0
+            for i in range(1, n):
+                fwt_sum += self.pre_train_acc[i - 1] - self.baselines[i]
+            fwt = fwt_sum / (n - 1)
+
+        return {"acc": acc, "bwt": bwt, "fwt": fwt}
 
     def _print_results_row(self, task_id, row):
         """Print evaluation results for the current task."""
@@ -217,3 +253,4 @@ class ContinualTrainer:
 
         print(f"\nACC: {metrics['acc']:.4f}")
         print(f"BWT: {metrics['bwt']:.4f}")
+        print(f"FWT: {metrics['fwt']:.4f}")

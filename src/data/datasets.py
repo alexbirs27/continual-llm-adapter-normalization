@@ -3,6 +3,7 @@
 from functools import partial
 
 from datasets import load_dataset
+from sklearn.model_selection import train_test_split
 
 # Dataset configs: (hf_name, text_fields, label_field, label_names or None)
 DATASET_REGISTRY = {
@@ -92,7 +93,7 @@ def _format_example(example, text_fields, label_field, label_names, tokenizer, m
 
 
 def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
-    """Load a single task dataset, return (train_dataset, eval_dataset)."""
+    """Load a single task dataset, return (train_dataset, dev_dataset, eval_dataset)."""
     cfg = DATASET_REGISTRY[task_name]
 
     ds = load_dataset(cfg["path"])
@@ -106,6 +107,12 @@ def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
     eval_max = min(2000, len(eval_ds))
     eval_ds = eval_ds.shuffle(seed=42).select(range(eval_max))
 
+    # 90/10 train/dev split
+    indices = list(range(len(train_ds)))
+    train_indices, dev_indices = train_test_split(indices, test_size=0.1, random_state=42)
+    dev_ds = train_ds.select(dev_indices)
+    train_ds = train_ds.select(train_indices)
+
     map_fn = partial(
         _format_example,
         text_fields=cfg["text_fields"],
@@ -116,12 +123,14 @@ def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
     )
 
     train_ds = train_ds.map(map_fn, remove_columns=train_ds.column_names)
+    dev_ds = dev_ds.map(map_fn, remove_columns=dev_ds.column_names)
     eval_ds = eval_ds.map(map_fn, remove_columns=eval_ds.column_names)
 
     train_ds.set_format("torch")
+    dev_ds.set_format("torch")
     eval_ds.set_format("torch")
 
-    return train_ds, eval_ds
+    return train_ds, dev_ds, eval_ds
 
 
 class LazyDatasetLoader:
@@ -141,6 +150,15 @@ class LazyDatasetLoader:
                 task_name, self.tokenizer, self.max_length, self.max_samples
             )
         return self._cache[task_name]
+
+    def get_split(self, task_name, split="eval"):
+        """Get a specific split: 'train', 'dev', or 'eval'."""
+        train_ds, dev_ds, eval_ds = self[task_name]
+        if split == "train":
+            return train_ds
+        elif split == "dev":
+            return dev_ds
+        return eval_ds
 
 
 def load_all_datasets(task_order, tokenizer, max_length=512, max_samples=20000):

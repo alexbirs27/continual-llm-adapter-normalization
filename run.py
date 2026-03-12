@@ -123,10 +123,10 @@ def main():
         print(f"\n{'='*60}")
         print("COMPARISON ACROSS METHODS")
         print(f"{'='*60}")
-        print(f"{'Method':<15} {'ACC':>10} {'BWT':>10}")
-        print("-" * 35)
+        print(f"{'Method':<15} {'ACC':>10} {'BWT':>10} {'FWT':>10}")
+        print("-" * 45)
         for name, m in all_metrics.items():
-            print(f"{name:<15} {m['acc']:>10.4f} {m['bwt']:>10.4f}")
+            print(f"{name:<15} {m['acc']:>10.4f} {m['bwt']:>10.4f} {m['fwt']:>10.4f}")
 
 
 if __name__ == "__main__":
