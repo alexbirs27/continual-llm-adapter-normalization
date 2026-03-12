@@ -111,6 +111,8 @@ class OLoRA:
         self.model = base_model
         self.lambda_1 = lambda_1
         self.lambda_2 = lambda_2
+        self.task_deltas = []
+        self.r = lora_config.r
 
         # Freeze base model
         for param in self.model.parameters():
@@ -180,8 +182,16 @@ class OLoRA:
         return total_loss
 
     def after_task(self, task_id):
+        deltas = []
+        for layer in self.olora_layers:
+            dw = torch.matmul(*layer.swap((layer.loranew_B, layer.loranew_A))).detach().cpu() * layer.scaling
+            deltas.append(dw)
+        self.task_deltas.append(deltas)
         for layer in self.olora_layers:
             layer.concatenate_and_reinit()
+
+    def get_task_deltas(self):
+        return self.task_deltas
 
     def set_eval_adapter(self, task_id):
         pass
