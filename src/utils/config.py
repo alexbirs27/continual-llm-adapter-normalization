@@ -22,6 +22,9 @@ class TrainingConfig:
     lambda_1: float = 0.0
     lambda_2: float = 0.0
     max_samples_per_task: int = 20000
+    max_eval_samples: int = 2000
+    dataset_fraction: float = 1.0  # fraction of train split to use (1.0=all, 0.5=half)
+    eval_fraction: float = 1.0     # fraction of test split to use
     task_order: List[str] = field(
         default_factory=lambda: [
             "ag_news",
@@ -46,7 +49,7 @@ def load_config(path: str):
 
     training_raw = raw.get("training", {})
     # Ensure numeric types are correct (YAML may parse scientific notation as str)
-    for key in ("lr", "lambda_1", "lambda_2", "dropout"):
+    for key in ("lr", "lambda_1", "lambda_2", "dropout", "dataset_fraction", "eval_fraction"):
         if key in training_raw:
             training_raw[key] = float(training_raw[key])
         if key in lora_raw:

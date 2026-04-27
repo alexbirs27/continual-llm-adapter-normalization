@@ -69,10 +69,14 @@ class ContinualTrainer:
                 labels = batch["labels"].to(self.device)
 
                 loss = self.method.get_loss(input_ids, attention_mask, labels)
+                if not torch.isfinite(loss):
+                    optimizer.zero_grad()
+                    continue
                 loss = loss / accum_steps
                 loss.backward()
 
                 if (step + 1) % accum_steps == 0:
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
 

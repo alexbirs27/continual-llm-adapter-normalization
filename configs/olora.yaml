@@ -17,7 +17,13 @@ training:
   max_seq_length: 256
   lambda_1: 0.5
   lambda_2: 0.0
-  max_samples_per_task: 2000
+  # Sample-size knobs:
+  #   dataset_fraction / eval_fraction: primary (1.0 = all, 0.5 = half, etc.)
+  #   max_samples_per_task / max_eval_samples: hard ceilings (set very high to disable)
+  dataset_fraction: 1.0
+  eval_fraction: 1.0
+  max_samples_per_task: 1000000
+  max_eval_samples: 1000000
   task_order:
     - ag_news
     - yelp_review_full

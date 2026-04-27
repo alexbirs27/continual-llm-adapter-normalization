@@ -1,0 +1,42 @@
+{
+  "method": "inclora",
+  "model": "Qwen/Qwen2.5-0.5B",
+  "task_order": [
+    "ag_news",
+    "yelp_review_full",
+    "amazon_polarity",
+    "dbpedia_14",
+    "yahoo_answers_topics"
+  ],
+  "results_matrix": [
+    [
+      0.7
+    ],
+    [
+      0.7,
+      0.15
+    ],
+    [
+      0.7,
+      0.15,
+      0.725
+    ],
+    [
+      0.7,
+      0.15,
+      0.725,
+      0.675
+    ],
+    [
+      0.7,
+      0.15,
+      0.725,
+      0.675,
+      0.3
+    ]
+  ],
+  "metrics": {
+    "acc": 0.51,
+    "bwt": 0.0
+  }
+}

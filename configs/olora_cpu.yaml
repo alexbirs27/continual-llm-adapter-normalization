@@ -1,5 +1,5 @@
-method: inclora
-model_name: Qwen/Qwen2.5-1.5B
+method: olora
+model_name: Qwen/Qwen2.5-0.5B
 
 lora:
   r: 8
@@ -10,20 +10,18 @@ lora:
     - v_proj
 
 training:
-  lr: 1e-3
+  lr: 3e-4
   epochs_per_task: 1
   batch_size: 2
   gradient_accumulation_steps: 4
-  max_seq_length: 256
-  lambda_1: 0.0
+  max_seq_length: 96
+  lambda_1: 0.5
   lambda_2: 0.0
-  # Sample-size knobs:
-  #   dataset_fraction / eval_fraction: primary (1.0 = all, 0.5 = half, etc.)
-  #   max_samples_per_task / max_eval_samples: hard ceilings (set very high to disable)
+  # Tiny smoke-test config: ~80 train / ~40 eval per task via hard caps
   dataset_fraction: 1.0
   eval_fraction: 1.0
-  max_samples_per_task: 1000000
-  max_eval_samples: 1000000
+  max_samples_per_task: 80
+  max_eval_samples: 40
   task_order:
     - ag_news
     - yelp_review_full

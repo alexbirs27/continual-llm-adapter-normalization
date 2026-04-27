@@ -57,14 +57,19 @@ def _format_example(example, text_fields, label_field, label_names, tokenizer, m
     label_idx = example[label_field]
     label_name = label_names[label_idx]
 
-    prompt = f"Classify: {text}\nLabel:"
     target = f" {label_name}"
-    full_text = prompt + target
+    # Reserve space for the target tokens so they survive truncation
+    target_token_len = len(tokenizer(target, add_special_tokens=False)["input_ids"])
+    prompt_budget = max(8, max_length - target_token_len - 2)
 
-    # Tokenize prompt (for masking) and full text
+    prompt = f"Classify: {text}\nLabel:"
     prompt_tokens = tokenizer(
-        prompt, truncation=True, max_length=max_length, add_special_tokens=True
+        prompt, truncation=True, max_length=prompt_budget, add_special_tokens=True
     )
+    # Rebuild prompt from truncated tokens to keep prompt+target within max_length
+    prompt_truncated = tokenizer.decode(prompt_tokens["input_ids"], skip_special_tokens=True)
+    full_text = prompt_truncated + target
+
     full_tokens = tokenizer(
         full_text, truncation=True, max_length=max_length, add_special_tokens=True,
         padding="max_length",
@@ -75,8 +80,13 @@ def _format_example(example, text_fields, label_field, label_names, tokenizer, m
 
     # Labels: mask prompt tokens with -100, keep target tokens
     labels = list(input_ids)
-    prompt_len = len(prompt_tokens["input_ids"])
-    for i in range(prompt_len):
+    # Re-tokenize the truncated prompt under the same conditions as full_tokens
+    # so prompt_len aligns with full_tokens' leading positions.
+    prompt_only_tokens = tokenizer(
+        prompt_truncated, truncation=True, max_length=max_length, add_special_tokens=True
+    )
+    prompt_len = len(prompt_only_tokens["input_ids"])
+    for i in range(min(prompt_len, len(labels))):
         labels[i] = -100
     # Also mask padding
     for i in range(len(labels)):
@@ -91,8 +101,21 @@ def _format_example(example, text_fields, label_field, label_names, tokenizer, m
     }
 
 
-def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
-    """Load a single task dataset, return (train_dataset, eval_dataset)."""
+def load_task_dataset(
+    task_name,
+    tokenizer,
+    max_length=512,
+    max_samples=20000,
+    max_eval_samples=2000,
+    dataset_fraction=1.0,
+    eval_fraction=1.0,
+):
+    """Load a single task dataset, return (train_dataset, eval_dataset).
+
+    Sample-size control: an effective limit is computed as
+    min(fraction * split_size, hard_cap). Fraction is the primary knob,
+    hard caps are optional ceilings for memory/compute safety.
+    """
     cfg = DATASET_REGISTRY[task_name]
 
     ds = load_dataset(cfg["path"])
@@ -100,11 +123,17 @@ def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
     train_ds = ds["train"]
     eval_ds = ds["test"]
 
-    # Subsample if needed
-    if max_samples and len(train_ds) > max_samples:
-        train_ds = train_ds.shuffle(seed=42).select(range(max_samples))
-    eval_max = min(2000, len(eval_ds))
-    eval_ds = eval_ds.shuffle(seed=42).select(range(eval_max))
+    train_target = int(len(train_ds) * dataset_fraction)
+    if max_samples:
+        train_target = min(train_target, max_samples)
+    train_target = max(1, min(train_target, len(train_ds)))
+    train_ds = train_ds.shuffle(seed=42).select(range(train_target))
+
+    eval_target = int(len(eval_ds) * eval_fraction)
+    if max_eval_samples:
+        eval_target = min(eval_target, max_eval_samples)
+    eval_target = max(1, min(eval_target, len(eval_ds)))
+    eval_ds = eval_ds.shuffle(seed=42).select(range(eval_target))
 
     map_fn = partial(
         _format_example,
@@ -127,22 +156,56 @@ def load_task_dataset(task_name, tokenizer, max_length=512, max_samples=20000):
 class LazyDatasetLoader:
     """Loads datasets on-demand when first accessed, not all upfront."""
 
-    def __init__(self, task_order, tokenizer, max_length=512, max_samples=20000):
+    def __init__(
+        self,
+        task_order,
+        tokenizer,
+        max_length=512,
+        max_samples=20000,
+        max_eval_samples=2000,
+        dataset_fraction=1.0,
+        eval_fraction=1.0,
+    ):
         self.task_order = task_order
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.max_samples = max_samples
+        self.max_eval_samples = max_eval_samples
+        self.dataset_fraction = dataset_fraction
+        self.eval_fraction = eval_fraction
         self._cache = {}
 
     def __getitem__(self, task_name):
         if task_name not in self._cache:
             print(f"Loading dataset: {task_name}")
             self._cache[task_name] = load_task_dataset(
-                task_name, self.tokenizer, self.max_length, self.max_samples
+                task_name,
+                self.tokenizer,
+                self.max_length,
+                self.max_samples,
+                self.max_eval_samples,
+                self.dataset_fraction,
+                self.eval_fraction,
             )
         return self._cache[task_name]
 
 
-def load_all_datasets(task_order, tokenizer, max_length=512, max_samples=20000):
+def load_all_datasets(
+    task_order,
+    tokenizer,
+    max_length=512,
+    max_samples=20000,
+    max_eval_samples=2000,
+    dataset_fraction=1.0,
+    eval_fraction=1.0,
+):
     """Return a lazy loader that loads each dataset on first access."""
-    return LazyDatasetLoader(task_order, tokenizer, max_length, max_samples)
+    return LazyDatasetLoader(
+        task_order,
+        tokenizer,
+        max_length,
+        max_samples,
+        max_eval_samples,
+        dataset_fraction,
+        eval_fraction,
+    )
