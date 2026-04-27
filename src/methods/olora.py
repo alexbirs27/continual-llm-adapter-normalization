@@ -100,7 +100,9 @@ def add_olora_by_name(model, target_module_names, olora_config):
         if any(m in name for m in target_module_names):
             if type(layer) in olora_config:
                 for attr_name, parametrization_fn in olora_config[type(layer)].items():
-                    parametrize.register_parametrization(layer, attr_name, parametrization_fn(layer))
+                    weight = getattr(layer, attr_name)
+                    p = parametrization_fn(layer).to(device=weight.device, dtype=weight.dtype)
+                    parametrize.register_parametrization(layer, attr_name, p)
 
 
 class OLoRA:

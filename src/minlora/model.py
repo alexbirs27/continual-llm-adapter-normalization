@@ -78,7 +78,9 @@ def apply_lora(layer, register=True, merge=False, lora_config=default_lora_confi
     if register:
         if type(layer) in lora_config:
             for attr_name, parametrization in lora_config[type(layer)].items():
-                parametrize.register_parametrization(layer, attr_name, parametrization(layer))
+                weight = getattr(layer, attr_name)
+                p = parametrization(layer).to(device=weight.device, dtype=weight.dtype)
+                parametrize.register_parametrization(layer, attr_name, p)
     else:  # this will remove all parametrizations, use with caution
         if hasattr(layer, "parametrizations"):
             for attr_name in list(layer.parametrizations.keys()):
