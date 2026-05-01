@@ -156,14 +156,14 @@ class OLoRA:
         for layer in self.olora_layers:
             if layer.has_past:
                 product = layer.lora_A @ layer.loranew_A.T
-                loss = loss + torch.abs(product).sum()
+                loss = loss + torch.abs(product).sum().to(loss.device)
         return loss
 
     def compute_l2_loss(self):
         loss = torch.tensor(0.0, device=self.olora_layers[0].loranew_A.device)
         for layer in self.olora_layers:
-            loss = loss + torch.norm(layer.loranew_A, p=2)
-            loss = loss + torch.norm(layer.loranew_B, p=2)
+            loss = loss + torch.norm(layer.loranew_A, p=2).to(loss.device)
+            loss = loss + torch.norm(layer.loranew_B, p=2).to(loss.device)
         return loss
 
     def get_loss(self, input_ids, attention_mask, labels):
@@ -174,9 +174,9 @@ class OLoRA:
         )
         total_loss = outputs.loss
         if self.lambda_1 > 0:
-            total_loss = total_loss + self.lambda_1 * self.compute_orthogonal_loss()
+            total_loss = total_loss + self.lambda_1 * self.compute_orthogonal_loss().to(total_loss.device)
         if self.lambda_2 > 0:
-            total_loss = total_loss + self.lambda_2 * self.compute_l2_loss()
+            total_loss = total_loss + self.lambda_2 * self.compute_l2_loss().to(total_loss.device)
         return total_loss
 
     def after_task(self, task_id):
