@@ -7,6 +7,11 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from src.analysis.weight_extraction import (
+    extract_inclora_adapters,
+    extract_olora_adapters,
+    save_adapters,
+)
 from src.data.datasets import load_all_datasets
 from src.methods.inclora import IncLoRA
 from src.methods.olora import OLoRA
@@ -84,6 +89,16 @@ def main():
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
     print(f"\nResults saved to {output_path}")
+
+    # Save per-task adapter weights for geometric analysis (Phase 3)
+    num_tasks = len(training_config.task_order)
+    if method_name == "olora":
+        adapters = extract_olora_adapters(method, r=lora_config.r, num_tasks=num_tasks)
+    else:
+        adapters = extract_inclora_adapters(method)
+    adapter_path = os.path.join(args.output_dir, f"{method_name}_adapters.pt")
+    save_adapters(adapters, adapter_path)
+    print(f"Adapters saved to {adapter_path}")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ training:
   batch_size: 8
   gradient_accumulation_steps: 1
   max_seq_length: 256
-  lambda_1: 0.5
+  lambda_1: 0.2
   lambda_2: 0.0
   dataset_fraction: 1.0
   eval_fraction: 1.0
