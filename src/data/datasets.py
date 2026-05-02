@@ -178,11 +178,16 @@ class LazyDatasetLoader:
     def __getitem__(self, task_name):
         if task_name not in self._cache:
             print(f"Loading dataset: {task_name}")
+            max_samples = (
+                self.max_samples.get(task_name, self.max_samples.get("default"))
+                if isinstance(self.max_samples, dict)
+                else self.max_samples
+            )
             self._cache[task_name] = load_task_dataset(
                 task_name,
                 self.tokenizer,
                 self.max_length,
-                self.max_samples,
+                max_samples,
                 self.max_eval_samples,
                 self.dataset_fraction,
                 self.eval_fraction,

@@ -12,19 +12,22 @@ lora:
 training:
   lr: 1e-3
   epochs_per_task: 1
-  batch_size: 2
-  gradient_accumulation_steps: 4
+  batch_size: 8
+  gradient_accumulation_steps: 1
   max_seq_length: 256
   lambda_1: 0.0
   lambda_2: 0.0
-  # Paper-style subset (matches O-LoRA standard CL benchmark protocol)
   dataset_fraction: 1.0
   eval_fraction: 1.0
-  max_samples_per_task: 1000
-  max_eval_samples: 500
+  max_eval_samples: 2000
+  # Paper proportions scaled to ~40% to fit 8h on T4 x2 with device_map="auto"
+  samples_per_task:
+    ag_news: 1600
+    amazon_polarity: 2000
+    dbpedia_14: 5600
+    yahoo_answers_topics: 4000
   task_order:
     - ag_news
-    - yelp_review_full
     - amazon_polarity
     - dbpedia_14
     - yahoo_answers_topics

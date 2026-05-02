@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 import yaml
 
@@ -25,6 +25,7 @@ class TrainingConfig:
     max_eval_samples: int = 2000
     dataset_fraction: float = 1.0  # fraction of train split to use (1.0=all, 0.5=half)
     eval_fraction: float = 1.0     # fraction of test split to use
+    samples_per_task: Dict[str, int] = field(default_factory=dict)  # per-task override; takes priority over max_samples_per_task
     task_order: List[str] = field(
         default_factory=lambda: [
             "ag_news",

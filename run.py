@@ -48,7 +48,7 @@ def main():
         training_config.task_order,
         tokenizer,
         max_length=training_config.max_seq_length,
-        max_samples=training_config.max_samples_per_task,
+        max_samples=training_config.samples_per_task or training_config.max_samples_per_task,
         max_eval_samples=training_config.max_eval_samples,
         dataset_fraction=training_config.dataset_fraction,
         eval_fraction=training_config.eval_fraction,
