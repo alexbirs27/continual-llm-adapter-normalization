@@ -1,0 +1,36 @@
+method: olora
+model_name: Qwen/Qwen2.5-1.5B
+
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules:
+    - q_proj
+    - v_proj
+
+training:
+  lr: 1e-3
+  epochs_per_task: 1
+  batch_size: 8
+  gradient_accumulation_steps: 1
+  max_seq_length: 256
+  lambda_1: 0.3
+  lambda_2: 0.0
+  dataset_fraction: 1.0
+  eval_fraction: 1.0
+  max_eval_samples: 2000
+  # ~133% of olora_gpu.yaml — targets ~8h on T4 x2 with device_map="auto"
+  # ~53% of paper's original counts (4000/5000/14000/10000)
+  # Training steps: 262+337+937+662 = 2198
+  # lambda_1 scaled up slightly (0.2->0.3) to match higher sample count
+  samples_per_task:
+    ag_news: 2100
+    amazon_polarity: 2700
+    dbpedia_14: 7500
+    yahoo_answers_topics: 5300
+  task_order:
+    - ag_news
+    - amazon_polarity
+    - dbpedia_14
+    - yahoo_answers_topics
