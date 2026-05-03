@@ -20,6 +20,7 @@ training:
   dataset_fraction: 1.0
   eval_fraction: 1.0
   max_eval_samples: 2000
+  eval_batch_size: 64
   # ~33% of olora_gpu.yaml — targets ~2h on T4 x2 with device_map="auto"
   # Training steps: 62+81+231+162 = 536
   samples_per_task:

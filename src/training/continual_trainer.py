@@ -125,7 +125,8 @@ class ContinualTrainer:
             tokens = self.tokenizer.encode(f" {name}", add_special_tokens=False)
             label_token_ids.append(tokens[0])
 
-        dataloader = DataLoader(eval_ds, batch_size=self.config.batch_size, shuffle=False)
+        eval_bs = getattr(self.config, 'eval_batch_size', 0) or self.config.batch_size
+        dataloader = DataLoader(eval_ds, batch_size=eval_bs, shuffle=False)
 
         correct = 0
         total = 0

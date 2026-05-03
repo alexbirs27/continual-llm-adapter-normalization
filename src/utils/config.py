@@ -23,6 +23,7 @@ class TrainingConfig:
     lambda_2: float = 0.0
     max_samples_per_task: int = 20000
     max_eval_samples: int = 2000
+    eval_batch_size: int = 0  # 0 = use batch_size
     dataset_fraction: float = 1.0  # fraction of train split to use (1.0=all, 0.5=half)
     eval_fraction: float = 1.0     # fraction of test split to use
     samples_per_task: Dict[str, int] = field(default_factory=dict)  # per-task override; takes priority over max_samples_per_task

@@ -20,6 +20,7 @@ training:
   dataset_fraction: 1.0
   eval_fraction: 1.0
   max_eval_samples: 2000
+  eval_batch_size: 64
   # ~133% of olora_gpu.yaml — targets ~8h on T4 x2 with device_map="auto"
   # ~53% of paper's original counts (4000/5000/14000/10000)
   # Training steps: 262+337+937+662 = 2198

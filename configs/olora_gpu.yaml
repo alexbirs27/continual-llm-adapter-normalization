@@ -20,6 +20,7 @@ training:
   dataset_fraction: 1.0
   eval_fraction: 1.0
   max_eval_samples: 2000
+  eval_batch_size: 64
   # Paper proportions scaled to ~40% to fit 8h on T4 x2 with device_map="auto"
   samples_per_task:
     ag_news: 1600
