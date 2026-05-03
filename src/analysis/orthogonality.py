@@ -1,4 +1,4 @@
-"""Cosine similarity matrices between per-task LoRA adapter matrices."""
+"""Similarity / orthogonality metrics between per-task LoRA adapter matrices."""
 
 import numpy as np
 import torch
@@ -9,7 +9,14 @@ matplotlib.use('Agg')
 from src.analysis.weight_extraction import delta_W
 
 
+# ── Pairwise similarity functions ─────────────────────────────────────────────
+
 def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Cosine similarity between two matrices treated as flat vectors.
+
+    Captures tr(A_i A_t^T) / (||A_i||_F ||A_t||_F).
+    In [-1, 1]; 0 = orthogonal as vectors.
+    """
     a_f = a.float().flatten()
     b_f = b.float().flatten()
     denom = a_f.norm() * b_f.norm()
@@ -18,21 +25,70 @@ def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> float:
     return (a_f @ b_f / denom).item()
 
 
-def task_similarity_matrix(adapters: dict, mode: str = 'A') -> np.ndarray:
+def gram_frobenius(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Normalized Frobenius norm of the Gram matrix G = a @ b.T.
+
+    For A matrices of shape (r, fan_in), G has shape (r, r).
+    Dividing by r makes it scale-invariant across ranks.
+    In [0, inf); 0 = perfectly orthogonal row spaces.
+    Directly corresponds to what the orthogonal loss minimizes (||G||_F^2).
     """
-    Build an (n_tasks × n_tasks) cosine similarity matrix averaged across layers.
+    r = a.shape[0]
+    G = a.float() @ b.float().T
+    return (torch.norm(G, p='fro') / r).item()
+
+
+def max_principal_cos(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Cosine of the smallest principal angle between the row subspaces of a and b.
+
+    Computed as the largest singular value of the normalized Gram matrix
+    Q_a^T Q_b, where Q_a, Q_b are row-orthonormalized versions of a, b.
+    In [0, 1]; 0 = fully orthogonal subspaces, 1 = subspaces share a direction.
+    This is the most geometrically principled subspace orthogonality measure.
+    """
+    a_f = a.float()
+    b_f = b.float()
+    if a_f.norm() < 1e-12 or b_f.norm() < 1e-12:
+        return 0.0
+    Q_a = torch.linalg.qr(a_f.T).Q   # (fan_in, r) — orthonormal columns
+    Q_b = torch.linalg.qr(b_f.T).Q   # (fan_in, r)
+    M = Q_a.T @ Q_b                   # (r, r)
+    sigma = torch.linalg.svd(M, full_matrices=False).S
+    return sigma[0].clamp(0.0, 1.0).item()
+
+
+METRICS = {
+    'cosine':    cosine_sim,
+    'frobenius': gram_frobenius,
+    'principal': max_principal_cos,
+}
+
+METRIC_LABELS = {
+    'cosine':    'Cosine similarity (flattened)',
+    'frobenius': 'Gram Frobenius norm / r',
+    'principal': 'Max principal angle cosine',
+}
+
+
+# ── Matrix-level analysis ─────────────────────────────────────────────────────
+
+def task_similarity_matrix(adapters: dict, mode: str = 'A',
+                           metric: str = 'cosine') -> np.ndarray:
+    """Build an (n_tasks × n_tasks) similarity matrix averaged across layers.
 
     Args:
         adapters: {task_id: {layer_name: {'A': Tensor, 'B': Tensor}}}
         mode:     'A'  — compare A matrices directly
                   'AB' — compare B@A low-rank update matrices
+        metric:   'cosine' | 'frobenius' | 'principal'
 
     Returns:
         sim_matrix: np.ndarray shape (n_tasks, n_tasks)
     """
-    num_tasks  = len(adapters)
+    num_tasks   = len(adapters)
     layer_names = list(adapters[0].keys())
     sim_matrix  = np.zeros((num_tasks, num_tasks))
+    sim_fn      = METRICS[metric]
 
     for i in range(num_tasks):
         for j in range(num_tasks):
@@ -42,14 +98,14 @@ def task_similarity_matrix(adapters: dict, mode: str = 'A') -> np.ndarray:
                     continue
                 m_i = adapters[i][layer]['A'] if mode == 'A' else delta_W(adapters[i][layer])
                 m_j = adapters[j][layer]['A'] if mode == 'A' else delta_W(adapters[j][layer])
-                sims.append(cosine_sim(m_i, m_j))
+                sims.append(sim_fn(m_i, m_j))
             sim_matrix[i, j] = float(np.mean(sims)) if sims else 0.0
 
     return sim_matrix
 
 
 def mean_off_diagonal(matrix: np.ndarray) -> float:
-    """Average cosine similarity between distinct task pairs (i ≠ j)."""
+    """Average similarity between distinct task pairs (i ≠ j)."""
     n = matrix.shape[0]
     mask = ~np.eye(n, dtype=bool)
     return float(matrix[mask].mean())
@@ -57,7 +113,7 @@ def mean_off_diagonal(matrix: np.ndarray) -> float:
 
 def plot_similarity_heatmap(sim_matrix: np.ndarray, title: str,
                             task_names=None, ax=None):
-    """Annotated heatmap of a task-pair cosine similarity matrix."""
+    """Annotated heatmap of a task-pair similarity matrix."""
     try:
         import seaborn as sns
         use_seaborn = True
@@ -72,16 +128,18 @@ def plot_similarity_heatmap(sim_matrix: np.ndarray, title: str,
     else:
         fig = ax.get_figure()
 
+    vmin = sim_matrix.min() if sim_matrix.min() < 0 else 0
+
     if use_seaborn:
         import seaborn as sns
         sns.heatmap(
             sim_matrix, annot=True, fmt='.3f',
-            cmap='RdYlGn_r', vmin=0, vmax=1,
+            cmap='RdYlGn_r', vmin=vmin, vmax=sim_matrix.max(),
             xticklabels=labels, yticklabels=labels, ax=ax,
         )
     else:
-        im = ax.imshow(sim_matrix, cmap='RdYlGn_r', vmin=0, vmax=1)
-        ax.set_xticks(range(n)); ax.set_xticklabels(labels)
+        im = ax.imshow(sim_matrix, cmap='RdYlGn_r', vmin=vmin, vmax=sim_matrix.max())
+        ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.set_yticks(range(n)); ax.set_yticklabels(labels)
         for i in range(n):
             for j in range(n):
