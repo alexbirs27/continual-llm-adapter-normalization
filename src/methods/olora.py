@@ -156,7 +156,7 @@ class OLoRA:
         for layer in self.olora_layers:
             if layer.has_past:
                 product = layer.lora_A @ layer.loranew_A.T
-                loss = loss + torch.abs(product).sum().to(loss.device)
+                loss = loss + (product ** 2).sum().to(loss.device)
         return loss
 
     def compute_l2_loss(self):
