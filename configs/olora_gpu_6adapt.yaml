@@ -1,0 +1,38 @@
+method: olora
+model_name: Qwen/Qwen2.5-1.5B
+
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - up_proj
+    - down_proj
+
+training:
+  lr: 1e-3
+  epochs_per_task: 1
+  batch_size: 8
+  gradient_accumulation_steps: 1
+  max_seq_length: 256
+  lambda_1: 0.1  # scaled down 3x from 0.3 — 6 modules vs 2 triples the orthogonal loss sum
+  lambda_2: 0.0
+  dataset_fraction: 1.0
+  eval_fraction: 1.0
+  max_eval_samples: 2000
+  eval_batch_size: 64
+  # Same sample budget as short run for direct comparison (only adapter scope changes)
+  samples_per_task:    
+    ag_news: 500
+    amazon_polarity: 650
+    dbpedia_14: 1850
+    yahoo_answers_topics: 1300
+  task_order:
+    - ag_news
+    - amazon_polarity
+    - dbpedia_14
+    - yahoo_answers_topics
