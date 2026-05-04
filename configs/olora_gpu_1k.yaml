@@ -1,0 +1,35 @@
+method: olora
+model_name: Qwen/Qwen2.5-1.5B
+
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules:
+    - q_proj
+    - v_proj
+
+training:
+  lr: 1e-3
+  epochs_per_task: 1
+  batch_size: 8
+  gradient_accumulation_steps: 1
+  max_seq_length: 256
+  lambda_1: 0.3
+  lambda_2: 0.0
+  dataset_fraction: 1.0
+  eval_fraction: 1.0
+  max_eval_samples: 2000
+  eval_batch_size: 64
+  # 1000 samples per task (flat/balanced) — ablation to isolate sample count vs imbalance
+  # Training steps: 125 * 4 = 500 total
+  samples_per_task:
+    ag_news: 1000
+    amazon_polarity: 1000
+    dbpedia_14: 1000
+    yahoo_answers_topics: 1000
+  task_order:
+    - ag_news
+    - amazon_polarity
+    - dbpedia_14
+    - yahoo_answers_topics
