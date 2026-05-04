@@ -12,15 +12,15 @@ lora:
 training:
   lr: 1e-3
   epochs_per_task: 1
-  batch_size: 8
-  gradient_accumulation_steps: 1
+  batch_size: 2
+  gradient_accumulation_steps: 4
   max_seq_length: 256
   lambda_1: 0.0
   lambda_2: 0.0
   dataset_fraction: 1.0
   eval_fraction: 1.0
   max_eval_samples: 2000
-  eval_batch_size: 64
+  eval_batch_size: 8
   # ~53% of paper's original counts (4000/5000/14000/10000)
   samples_per_task:
     ag_news: 2100

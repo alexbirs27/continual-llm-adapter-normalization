@@ -93,9 +93,11 @@ def main():
     # Save per-task adapter weights for geometric analysis (Phase 3)
     num_tasks = len(training_config.task_order)
     if method_name == "olora":
-        adapters = extract_olora_adapters(method, r=lora_config.r, num_tasks=num_tasks)
+        adapters = extract_olora_adapters(method, r=lora_config.r, num_tasks=num_tasks,
+                                          target_modules=tuple(lora_config.target_modules))
     else:
-        adapters = extract_inclora_adapters(method)
+        adapters = extract_inclora_adapters(method,
+                                            target_modules=tuple(lora_config.target_modules))
     adapter_path = os.path.join(args.output_dir, f"{method_name}_adapters.pt")
     save_adapters(adapters, adapter_path)
     print(f"Adapters saved to {adapter_path}")

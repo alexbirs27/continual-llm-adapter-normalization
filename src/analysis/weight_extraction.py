@@ -6,7 +6,7 @@ import torch
 
 _PARAM_SUFFIX = re.compile(r'\.parametrizations\.weight\.\d+$')
 _LAYER_IDX    = re.compile(r'\.layers\.(\d+)\.')
-_MODULE_TYPE  = re.compile(r'\.(q_proj|v_proj)\b')
+_MODULE_TYPE  = re.compile(r'\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)\b')
 
 
 def _clean_name(name: str) -> str:
