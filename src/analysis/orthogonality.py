@@ -33,26 +33,34 @@ def gram_frobenius(a: torch.Tensor, b: torch.Tensor) -> float:
     In [0, inf); 0 = perfectly orthogonal row spaces.
     Directly corresponds to what the orthogonal loss minimizes (||G||_F^2).
     """
-    r = a.shape[0]
+    r = min(a.shape)   # rank dimension, works for both (r×fan_in) and (fan_out×r)
     G = a.float() @ b.float().T
     return (torch.norm(G, p='fro') / r).item()
 
 
 def max_principal_cos(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Cosine of the smallest principal angle between the row subspaces of a and b.
+    """Cosine of the smallest principal angle between the low-rank subspaces of a and b.
 
-    Computed as the largest singular value of the normalized Gram matrix
-    Q_a^T Q_b, where Q_a, Q_b are row-orthonormalized versions of a, b.
+    Works for both A matrices (r × fan_in) and B matrices (fan_out × r).
+    The subspace is always taken along the large dimension (the one >= r):
+      - A (r × fan_in): row subspace in R^{fan_in} — uses QR(a.T)
+      - B (fan_out × r): column subspace in R^{fan_out} — uses QR(b)
     In [0, 1]; 0 = fully orthogonal subspaces, 1 = subspaces share a direction.
-    This is the most geometrically principled subspace orthogonality measure.
     """
     a_f = a.float()
     b_f = b.float()
     if a_f.norm() < 1e-12 or b_f.norm() < 1e-12:
         return 0.0
-    Q_a = torch.linalg.qr(a_f.T).Q   # (fan_in, r) — orthonormal columns
-    Q_b = torch.linalg.qr(b_f.T).Q   # (fan_in, r)
-    M = Q_a.T @ Q_b                   # (r, r)
+    # Orient so the tall dimension (>= r) is the rows of the matrix passed to QR,
+    # giving Q of shape (tall_dim, r) — r orthonormal columns spanning the subspace.
+    def _basis(m):
+        if m.shape[0] < m.shape[1]:   # (r, fan) — row subspace: QR(m.T)
+            return torch.linalg.qr(m.T).Q
+        else:                           # (fan, r) — column subspace: QR(m)
+            return torch.linalg.qr(m).Q
+    Q_a = _basis(a_f)   # (large_dim, r)
+    Q_b = _basis(b_f)   # (large_dim, r)
+    M = Q_a.T @ Q_b     # (r, r)
     sigma = torch.linalg.svd(M, full_matrices=False).S
     return sigma[0].clamp(0.0, 1.0).item()
 
@@ -79,6 +87,7 @@ def task_similarity_matrix(adapters: dict, mode: str = 'A',
     Args:
         adapters: {task_id: {layer_name: {'A': Tensor, 'B': Tensor}}}
         mode:     'A'  — compare A matrices directly
+                  'B'  — compare B matrices directly
                   'AB' — compare B@A low-rank update matrices
         metric:   'cosine' | 'frobenius' | 'principal'
 
@@ -96,8 +105,15 @@ def task_similarity_matrix(adapters: dict, mode: str = 'A',
             for layer in layer_names:
                 if layer not in adapters[i] or layer not in adapters[j]:
                     continue
-                m_i = adapters[i][layer]['A'] if mode == 'A' else delta_W(adapters[i][layer])
-                m_j = adapters[j][layer]['A'] if mode == 'A' else delta_W(adapters[j][layer])
+                if mode == 'A':
+                    m_i = adapters[i][layer]['A']
+                    m_j = adapters[j][layer]['A']
+                elif mode == 'B':
+                    m_i = adapters[i][layer]['B']
+                    m_j = adapters[j][layer]['B']
+                else:
+                    m_i = delta_W(adapters[i][layer])
+                    m_j = delta_W(adapters[j][layer])
                 sims.append(sim_fn(m_i, m_j))
             sim_matrix[i, j] = float(np.mean(sims)) if sims else 0.0
 

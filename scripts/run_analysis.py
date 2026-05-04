@@ -72,7 +72,21 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     plt.close(fig)
     print("Saved task-pair B@A cosine heatmap.")
 
-    # ── 3: Layer-wise plots — all 3 A-matrix metrics on one figure ────────────
+    # ── 3: Task-pair similarity heatmaps for all 3 B-matrix metrics ───────────
+    sim_B = {}
+    for metric in ALL_METRICS:
+        sim_B[metric] = task_similarity_matrix(adapters, mode='B', metric=metric)
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4))
+    fig.suptitle(f'{method_name} — task-pair similarity (B matrices)')
+    for ax, metric in zip(axes, ALL_METRICS):
+        plot_similarity_heatmap(sim_B[metric], METRIC_LABELS[metric], task_names, ax=ax)
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_B.png'), dpi=150)
+    plt.close(fig)
+    print("Saved task-pair B-matrix similarity heatmaps.")
+
+    # ── 4: Layer-wise plots — all 3 A-matrix metrics on one figure ────────────
     layer_scores_A = {}
     for metric in ALL_METRICS:
         pl = per_layer_similarity(adapters, mode='A', metric=metric)
@@ -83,7 +97,7 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     plt.close(fig)
     print("Saved layer-wise A-matrix orthogonality plot.")
 
-    # ── 4: Layer-wise A vs AB (cosine only, for direct comparison) ────────────
+    # ── 5: Layer-wise A vs AB (cosine only, for direct comparison) ────────────
     pl_AB = per_layer_similarity(adapters, mode='AB', metric='cosine')
     layer_scores_AB = average_off_diagonal_per_layer(pl_AB)
 
@@ -94,14 +108,15 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     plt.close(fig)
     print("Saved layer-wise A vs B@A cosine plot.")
 
-    # ── 5: Per-module heatmaps — all 3 A-matrix metrics ──────────────────────
+    # ── 6: Per-module heatmaps — all 3 A-matrix metrics ──────────────────────
     fig = plot_module_orthogonality(layer_scores_A, method_name=method_name)
     fig.savefig(os.path.join(output_dir, f'{method_name}_module_orthogonality.png'), dpi=150)
     plt.close(fig)
     print("Saved per-module orthogonality plot.")
 
-    # ── 6: Summary statistics ─────────────────────────────────────────────────
+    # ── 7: Summary statistics ─────────────────────────────────────────────────
     stats_A = {metric: summary_stats(sim_A[metric]) for metric in ALL_METRICS}
+    stats_B = {metric: summary_stats(sim_B[metric]) for metric in ALL_METRICS}
     stats_AB = summary_stats(sim_AB)
     print_summary(method_name, stats_A, stats_AB)
 
@@ -113,6 +128,13 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
                 'sim_matrix':   sim_A[metric].tolist(),
                 'summary':      stats_A[metric],
                 'layer_scores': {k: float(v) for k, v in layer_scores_A[metric].items()},
+            }
+            for metric in ALL_METRICS
+        },
+        'B_matrices': {
+            metric: {
+                'sim_matrix': sim_B[metric].tolist(),
+                'summary':    stats_B[metric],
             }
             for metric in ALL_METRICS
         },
