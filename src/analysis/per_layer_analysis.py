@@ -55,15 +55,20 @@ def _sorted_layers(scores: dict):
 def plot_layer_orthogonality(scores_per_metric: dict, method_name: str = ''):
     """Line plot: mean off-diagonal similarity vs layer index, one curve per metric.
 
+    Averages across all module types at each layer index so there is exactly
+    one data point per transformer block.
+
     Args:
         scores_per_metric: {metric_name: {layer_name: float}}
     """
     fig, ax = plt.subplots(figsize=(10, 4))
 
     for metric, scores in scores_per_metric.items():
-        layers = _sorted_layers(scores)
-        idxs = [layer_index(k) for k, _ in layers]
-        vals = [v for _, v in layers]
+        layer_vals = defaultdict(list)
+        for k, v in scores.items():
+            layer_vals[layer_index(k)].append(v)
+        idxs = sorted(layer_vals.keys())
+        vals = [float(np.mean(layer_vals[idx])) for idx in idxs]
         ax.plot(idxs, vals, marker='o', label=METRIC_LABELS[metric], linewidth=1.5)
 
     ax.axhline(0, color='grey', linestyle=':', linewidth=0.8, label='Perfect orthogonality')
@@ -87,18 +92,31 @@ def per_module_scores(per_layer_scores: dict) -> dict:
 
 
 def plot_module_orthogonality(scores_per_metric: dict, method_name: str = ''):
-    """Two-panel plot (q_proj / v_proj), one curve per metric per panel.
+    """Grid plot with one panel per module type, one curve per metric per panel.
+
+    Module types are discovered dynamically from the layer names in scores,
+    so the plot works for any combination of target_modules.
 
     Args:
         scores_per_metric: {metric_name: {layer_name: float}}
     """
-    modules = ['q_proj', 'v_proj']
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
+    first_scores = next(iter(scores_per_metric.values()))
+    modules = sorted(
+        {module_type(k) for k in first_scores} - {'unknown'},
+        key=lambda m: ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'].index(m)
+        if m in ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'] else 99
+    )
+
+    n = len(modules)
+    ncols = min(n, 3)
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), sharey=True, squeeze=False)
     fig.suptitle(f'Per-module orthogonality (A matrices) — {method_name}')
 
-    for ax, mod in zip(axes, modules):
+    for idx, mod in enumerate(modules):
+        ax = axes[idx // ncols][idx % ncols]
         for metric, scores in scores_per_metric.items():
-            filtered = {k: v for k, v in scores.items() if mod in k}
+            filtered = {k: v for k, v in scores.items() if module_type(k) == mod}
             groups = per_module_scores(filtered)
             pts = groups.get(mod, [])
             if pts:
@@ -110,6 +128,10 @@ def plot_module_orthogonality(scores_per_metric: dict, method_name: str = ''):
         ax.set_xlabel('Layer index')
         ax.set_ylabel('Mean inter-task similarity')
         ax.legend(fontsize=7)
+
+    # Hide any unused subplots
+    for idx in range(n, nrows * ncols):
+        axes[idx // ncols][idx % ncols].set_visible(False)
 
     plt.tight_layout()
     return fig

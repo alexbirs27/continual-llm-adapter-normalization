@@ -1,0 +1,34 @@
+{
+    "method": "olora",
+    "model": "Qwen/Qwen2.5-1.5B",
+    "task_order": [
+        "ag_news",
+        "amazon_polarity",
+        "dbpedia_14",
+        "yahoo_answers_topics"
+    ],
+    "results_matrix": [
+        [
+            0.7925
+        ],
+        [
+            0.2735,
+            0.869
+        ],
+        [
+            0.5365,
+            0.708,
+            0.9225
+        ],
+        [
+            0.458,
+            0.567,
+            0.527,
+            0.4895
+        ]
+    ],
+    "metrics": {
+        "acc": 0.510375,
+        "bwt": -0.34400000000000003
+    }
+}
