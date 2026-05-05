@@ -42,7 +42,7 @@
 {
 grid=false,
 headerborder=open, % Adds a border around the header of content boxes
-colspacing=2em, % Column spacing
+colspacing=0.8em, % Column spacing (also vertical gap between boxes)
 bgColorOne=white, % Background color for the gradient on the left side of the poster
 bgColorTwo=white, % Background color for the gradient on the right side of the poster
 borderColor=blackbitdefender, % Border color
@@ -52,7 +52,7 @@ headerFontColor=white, % Text color for the header text in the content boxes
 boxColorOne=white, % Background color of the content boxes
 textborder=rounded, %rectangle, % Format of the border around content boxes, can be: none, bars, coils, triangles, rectangle, rounded, roundedsmall, roundedright or faded
 eyecatcher=false, % Set to false for ignoring the left logo in the title and move the title left
-headerheight=0.12\textheight, % Height of the header
+headerheight=0.115\textheight, % Height of the header
 headershape=rounded, % Specify the rounded corner in the content box headers, can be: rectangle, small-rounded, roundedright, roundedleft or rounded
 headershade=plain,
 headerfont=\Large\textsf, % Large, bold and sans serif font in the headers of content boxes
@@ -66,6 +66,7 @@ linewidth=0.25pt % Width of the border lines around content boxes
 %----------------------------------------------------------------------------------------
 %
 {
+\vspace{0.5em}\\
 \textsf %Sans Serif
 {Continual Learning with O-LoRA: Orthogonal Low-Rank Adapters for Sequential Tasks}
 }
@@ -215,7 +216,7 @@ $/r$ (the quantity minimised by O-LoRA), and max principal angle cosine.
 
 \vspace{0.3em}
 \begin{center}
-\includegraphics[trim=10 5 10 25,clip,width=0.94\textwidth]{task_similarity_A_8h.pdf}\\[2pt]
+\includegraphics[trim=10 5 10 25,clip,width=1.0\textwidth]{task_similarity_A_8h.pdf}\\[2pt]
 {\footnotesize Task-pair similarity of $A$ matrices (8h): \textbf{all metrics near-zero
 off-diagonal} -- $A$ matrices are geometrically separated.}
 \end{center}
@@ -227,8 +228,8 @@ cosine and Gram Frobenius metrics are also applied to the full weight update
 $\Delta W = BA$. For these product matrices the Frobenius norm is reported \emph{without}
 rank normalisation -- would scale values by up to $192\times$ depending on the module.
 \begin{center}
-\includegraphics[trim=20 10 20 15,clip,width=0.48\textwidth]{layer_orthogonality_A_8h.pdf}\hfill
-\includegraphics[trim=20 10 20 15,clip,width=0.48\textwidth]{layer_orthogonality_AB_8h.pdf}
+\includegraphics[trim=20 10 20 15,clip,width=0.495\textwidth]{layer_orthogonality_A_8h.pdf}\hfill
+\includegraphics[trim=20 10 20 15,clip,width=0.495\textwidth]{layer_orthogonality_AB_8h.pdf}
 \end{center}
 
 \vspace{0.1em}
