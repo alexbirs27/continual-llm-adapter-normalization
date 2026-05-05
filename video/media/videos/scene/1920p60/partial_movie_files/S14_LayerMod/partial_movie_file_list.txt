@@ -1,0 +1,10 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/3331026197_2147058341_223132457.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_1288674814_2644947257.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_3462815944_3021425062.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_4254225568_4025944457.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_2683275544_908819886.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_2335662311_1160206166.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_1761424704_2013652823.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_3220542864_1214954615.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S14_LayerMod/146994455_2950721455_3547038688.mp4'

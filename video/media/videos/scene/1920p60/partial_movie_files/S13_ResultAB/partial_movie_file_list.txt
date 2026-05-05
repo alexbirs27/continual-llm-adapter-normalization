@@ -1,0 +1,7 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/3331026197_1075559518_223132457.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/146994455_1523986084_3632376299.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/146994455_1668181500_1645469990.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/146994455_4054087109_3358169963.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/146994455_830181782_1213013435.mp4'
+file 'file:/home/alex/Desktop/alexFacultate/continual-llm-adapter-normalization/video/media/videos/scene/1920p60/partial_movie_files/S13_ResultAB/146994455_2950721455_2090367116.mp4'

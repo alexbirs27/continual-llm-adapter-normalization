@@ -72,7 +72,9 @@ linewidth=0.25pt % Width of the border lines around content boxes
 {\sf\vspace{0.1em}\\
 Alex Birsan, Radu Savin
 \vspace{0.1em}\\
-\small{University of Bucharest, Romania}
+\small Coordinators: Marius Ninel C\u{a}t\u{a}lin Dr\u{a}goi, Florin Brad
+\vspace{0.1em}\\
+\small University of Bucharest, Romania
 }
 {\IfFileExists{figures/unibuc.png}{\includegraphics[scale=0.5]{unibuc}}{\fbox{\parbox[c][3cm][c]{5cm}{\centering\sf University\\of Bucharest}}}} % University/lab logo
 
@@ -83,11 +85,11 @@ Continual learning requires a model to sequentially acquire knowledge across mul
 without forgetting what it previously learned. A common challenge is \textbf{catastrophic
 forgetting}: adapting to a new task overwrites representations built for earlier ones.
 
-When parameter-efficient methods such as \textbf{LoRA}~\citep{Hu2022LoRA} are applied in this setting, the
+When parameter-efficient methods such as \textbf{LoRA} are applied in this setting, the
 low-rank adapter matrices trained on successive tasks tend to occupy overlapping subspaces,
 causing destructive interference.
 
-\textbf{O-LoRA}~\citep{Wang2023OLoRA} addresses this by imposing an orthogonality constraint
+\textbf{O-LoRA} addresses this by imposing an orthogonality constraint
 on the $A$ matrices of each new task adapter with respect to all previously learned ones,
 ensuring each task projects inputs into a distinct region of the low-rank latent space and
 limiting the interference that drives forgetting.
@@ -98,10 +100,10 @@ limiting the interference that drives forgetting.
 
 \textbf{Task sequence (fixed order):}
 \begin{compactitem}
-  \item \textbf{AG News}~\citep{Zhang2015CharCNN} -- 4-class news topic classification
-  \item \textbf{Amazon Polarity}~\citep{McAuley2015} -- binary sentiment classification
-  \item \textbf{DBpedia 14}~\citep{Zhang2015CharCNN} -- 14-class Wikipedia topic classification
-  \item \textbf{Yahoo Answers Topics}~\citep{Zhang2015CharCNN} -- 10-class question topics
+  \item \textbf{AG News} -- 4-class news topic classification
+  \item \textbf{Amazon Polarity} -- binary sentiment classification
+  \item \textbf{DBpedia 14} -- 14-class Wikipedia topic classification
+  \item \textbf{Yahoo Answers Topics} -- 10-class question topics
 \end{compactitem}
 Each task is trained on independently, with no replay of prior task data.
 
@@ -116,7 +118,7 @@ Each task is trained on independently, with no replay of prior task data.
 \bottomrule
 \end{tabular}
 \end{center}
-Only the input text is truncated when the sequence exceeds the maximum length. Cross-entropy
+Only the input text is truncated when the sequence exceeds the maximum length of 256. Cross-entropy
 loss is computed only on the label token; at evaluation the predicted label is the candidate
 label token with maximum logit at the position before \texttt{Answer}.
 
@@ -125,52 +127,44 @@ label token with maximum logit at the position before \texttt{Answer}.
 
 
 
-\headerbox{3. Models}{name=architecture,span=2,column=1}{
+\headerbox{3. Models}{name=architecture,column=0,below=sketch,span=1}{
 
-\textbf{Backbone:} Qwen2.5-1.5B~\citep{Qwen2024}.\hspace{2em}
-\textbf{LoRA adapters:} rank $r=8$, scaling $\alpha=32$, dropout 0.1, applied to the query and
-value projections of every attention layer.\hspace{2em}
-\textbf{Optimisation:} 1 epoch / task, learning rate $10^{-3}$, batch size 8.
+\textbf{Backbone:} Qwen2.5-1.5B. \textbf{LoRA:} rank $r{=}8$, $\alpha{=}32$, dropout 0.1,
+on $Q,V$ of every attention layer. \textbf{Optim:} 1 epoch/task, lr $10^{-3}$, batch 8.
 
-\vspace{0.4em}
+\vspace{0.3em}
 \textbf{Compared methods:}
 \begin{compactitem}
-  \item \textbf{IncLoRA} -- interference-free upper bound: a separate adapter trained
-        and frozen for each task ($\text{BWT}=0$ by construction~\citep{LopezPaz2017GEM}).
-  \item \textbf{O-LoRA} -- a single cumulative adapter penalising overlap between the new
-        task's $A$ matrix and all previously learned ones via an orthogonal regularisation
-        term weighted by $\lambda_1 \in [0.2, 0.3]$.
+  \item \textbf{IncLoRA} -- separate frozen adapter per task ($\text{BWT}=0$ by construction).
+  \item \textbf{O-LoRA} -- one cumulative adapter; orthogonality penalty between the new
+        task's $A$ and all previous ones, weighted by $\lambda_1 \in [0.2, 0.3]$.
 \end{compactitem}
 
-\vspace{0.4em}
-\textbf{Orthogonal loss.} For task $t$ with adapter $\Delta W_t = B_t A_t$:
+\vspace{0.2em}
+\textbf{Orthogonal loss.} For task $t$ with $\Delta W_t = B_t A_t$:
 \[
-\mathcal{L}_t \;=\; \mathcal{L}_{\mathrm{CE}}(A_t,B_t)
-\;+\; \lambda_1 \!\!\sum_{i<t}\bigl\lVert A_t A_i^{\!\top}\bigr\rVert_F^{2}
+\mathcal{L}_t = \mathcal{L}_{\mathrm{CE}}(A_t,B_t)
++ \lambda_1 \!\!\sum_{i<t}\bigl\lVert A_t A_i^{\!\top}\bigr\rVert_F^{2}
 \]
-The penalty drives the row-spaces of successive $A$ matrices into mutually orthogonal
-directions. Crucially, \textbf{no constraint is applied to the $B$ matrices}.
-
+The penalty drives row-spaces of successive $A$ into orthogonal directions.
 }
 
 
-\headerbox{4. Results}{name=res,column=1,below=architecture,span=2}{
+\headerbox{4. Results}{name=res,column=1,row=0,span=2}{
 
-\noindent
-\begin{tabular}[t]{@{}l@{\hspace{1.2cm}}l@{}}
-\begin{tabular}[t]{lc}
-\multicolumn{2}{l}{\textbf{IncLoRA baseline (no forgetting):}}\\
+\textbf{IncLoRA baseline (no forgetting):}\\[2pt]
+\begin{tabular}{lc}
 \toprule
 \textbf{Task} & \textbf{Accuracy}\\
 \midrule
-AG News              & 0.854\\
-Amazon Polarity      & 0.956\\
-DBpedia 14           & 0.972\\
-Yahoo Answers Topics & 0.640\\
+AG News              & 0.8945\\
+Amazon Polarity      & 0.958\\
+DBpedia 14           & 0.968\\
+Yahoo Answers Topics & 0.7135\\
 \bottomrule
 \end{tabular}
-&
-\begin{tabular}[t]{lcc}
+\hfill
+\begin{tabular}[b]{lcc}
 \multicolumn{3}{l}{\textbf{Impact of prompt structure:}}\\
 \toprule
 \textbf{Prompt format} & \textbf{Avg Acc} & \textbf{BWT}\\
@@ -178,18 +172,17 @@ Yahoo Answers Topics & 0.640\\
 Old (no label options)      & 0.597 & $-0.344$\\
 New (instruction + options) & 0.799 & $-0.091$\\
 \bottomrule
-\end{tabular}
-\end{tabular}
+\end{tabular}\hspace*{2em}\mbox{}
 
 \vspace{0.8em}
 \textbf{O-LoRA -- summary metrics:}\\[2pt]
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Run} & \textbf{Samples / task} & $\boldsymbol{\lambda_1}$ & \textbf{Avg Acc} & \textbf{BWT}\\
+\textbf{Samples / task} & $\boldsymbol{\lambda_1}$ & \textbf{Avg Acc} & \textbf{BWT}\\
 \midrule
-Short             & 500/500/500/500     & 0.3 & 0.846 & $-0.032$\\
-2h                & 500/650/1850/1300   & 0.2 & 0.799 & $-0.091$\\
-Full ($\sim$50\%) & 2100/2700/7500/5300 & 0.3 & 0.654 & $-0.268$\\
+500/500/500/500     & 0.3 & 0.846 & $-0.032$\\
+500/650/1850/1300   & 0.2 & 0.799 & $-0.091$\\
+2100/2700/7500/5300 & 0.3 & 0.654 & $-0.268$\\
 \bottomrule
 \end{tabular}
 
@@ -198,7 +191,7 @@ Full ($\sim$50\%) & 2100/2700/7500/5300 & 0.3 & 0.654 & $-0.268$\\
 \small
 \begin{tabular}{lccc}
 \toprule
-\textbf{Task} & \textbf{Short} & \textbf{2h} & \textbf{Full ($\sim$50\%)}\\
+\textbf{Task} & \textbf{Run 1} & \textbf{Run 2} & \textbf{Run 3}\\
 \midrule
 AG News              & 0.878$\to$0.825 ($-6\%$)    & 0.842$\to$0.747 ($-11\%$) & 0.887$\to$0.494 ($-44\%$)\\
 Amazon Polarity      & 0.956$\to$0.957 ($\sim$0\%) & 0.947$\to$0.915 ($-3\%$)  & 0.905$\to$0.746 ($-18\%$)\\
@@ -212,40 +205,50 @@ though more data improves \emph{initial} per-task accuracy. The \textbf{instruct
 prompt format yields $+0.20$ Avg Acc and $+0.25$ BWT -- a larger effect than any
 hyperparameter choice.
 
+}
+
+
+\headerbox{5. Orthogonality Analysis}{name=ortho,column=1,below=res,span=2}{
+
+Three pairwise metrics across task adapter matrices: cosine similarity, Gram Frobenius norm
+$/r$ (the quantity minimised by O-LoRA), and max principal angle cosine.
+
 \vspace{0.3em}
 \begin{center}
-\includegraphics[width=0.55\textwidth]{task_similarity_A.png}\\
-{\footnotesize Pairwise similarity of $A$ matrices: cosine, Gram Frobenius norm $/r$,
-max principal angle cosine -- all near-zero off-diagonal.}
+\includegraphics[trim=10 5 10 25,clip,width=0.94\textwidth]{task_similarity_A_8h.pdf}\\[2pt]
+{\footnotesize Task-pair similarity of $A$ matrices (8h): \textbf{all metrics near-zero
+off-diagonal} -- $A$ matrices are geometrically separated.}
+\end{center}
+
+\vspace{0.3em}
+\textbf{Layer-wise breakdown ($A$ vs $BA$).} A different view -- per-layer mean inter-task
+similarity. The constraint holds across all transformer blocks for $A$ (left). The same
+cosine and Gram Frobenius metrics are also applied to the full weight update
+$\Delta W = BA$. For these product matrices the Frobenius norm is reported \emph{without}
+rank normalisation -- would scale values by up to $192\times$ depending on the module.
+\begin{center}
+\includegraphics[trim=20 10 20 15,clip,width=0.48\textwidth]{layer_orthogonality_A_8h.pdf}\hfill
+\includegraphics[trim=20 10 20 15,clip,width=0.48\textwidth]{layer_orthogonality_AB_8h.pdf}
 \end{center}
 
 \vspace{0.1em}
-\textbf{Orthogonality analysis.} All three metrics show near-zero similarity across $A$ even
-with $\lambda_1 \in [0.2,0.3]$ -- the constraint is easy to satisfy. However $B$ matrices,
-unconstrained by the loss, share $\sim 30\%$ of their column-space directions
-(principal-angle cosine $\sim 0.29$) and grow in magnitude with training -- plausibly the
-primary driver of forgetting at higher scales.
+$B$ matrices are unconstrained: they share $\sim 30\%$ of their column-space directions
+(principal-angle cosine $\sim 0.29$) and grow in magnitude with training. 
 
 }
 
 
-\headerbox{6. References}{name=refs,column=0,above=bottom,span=1}{
-\renewcommand{\section}[2]{}%
-\scriptsize
-\bibliographystyle{plainnat}
-\bibliography{poster}
-}
-
-\headerbox{5. Conclusion}{name=conclusion,column=1,below=res,span=2}{
+\headerbox{6. Conclusion}{name=conclusion,column=1,below=ortho,span=2}{
 \begin{compactitem}
-  \item O-LoRA's regulariser keeps $A$ matrices \textbf{geometrically separated} with mild
-        penalties; translating this into reduced forgetting is \textbf{highly sensitive to
-        data scale} -- near-zero BWT at 500 samples/task, sharp collapse ($-0.268$) at
-        $\sim$50\% of the paper's scale.
-  \item The unregularised $B$ matrices grow in magnitude and share $\sim 30\%$ of their
-        column-space directions across tasks -- a likely primary driver of forgetting at scale.
-  \item \textbf{Prompt structure matters more than hyperparameters}: explicitly listing label
-        names yields $+0.20$ accuracy and $+0.25$ BWT.
+  \item $A$ matrices are \textbf{geometrically separated} with mild penalties, uniformly
+        across every layer.
+  \item Extending the constraint to all six projection modules ($q,k,v,o,$ up, down): $A$
+        keeps a \textbf{similar degree of inter-task orthogonality regardless of the
+        targeted module}.
+  \item Forgetting is \textbf{highly sensitive to data scale}: BWT $-0.032$ at 500
+        samples/task, $-0.268$ at $\sim$50\% of the paper's scale. \textbf{Prompt structure
+        $>$ hyperparameters}: $+0.20$ Avg Acc, $+0.25$ BWT. \textbf{Future work}:
+        regularise $B$ or constrain $\lVert BA\rVert$ directly.
 \end{compactitem}
 }
 
