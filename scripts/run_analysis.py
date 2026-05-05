@@ -59,7 +59,7 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     for ax, metric in zip(axes, ALL_METRICS):
         plot_similarity_heatmap(sim_A[metric], METRIC_LABELS[metric], task_names, ax=ax)
     plt.tight_layout()
-    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_A.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_A.pdf'))
     plt.close(fig)
     print("Saved task-pair A-matrix similarity heatmaps.")
 
@@ -70,7 +70,7 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     for ax, metric in zip(axes, AB_METRICS):
         plot_similarity_heatmap(sim_AB[metric], METRIC_LABELS[metric], task_names, ax=ax)
     plt.tight_layout()
-    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_AB.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_AB.pdf'))
     plt.close(fig)
     print("Saved task-pair B@A heatmaps.")
 
@@ -84,7 +84,7 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     for ax, metric in zip(axes, ALL_METRICS):
         plot_similarity_heatmap(sim_B[metric], METRIC_LABELS[metric], task_names, ax=ax)
     plt.tight_layout()
-    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_B.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_B.pdf'))
     plt.close(fig)
     print("Saved task-pair B-matrix similarity heatmaps.")
 
@@ -95,7 +95,7 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
         layer_scores_A[metric] = average_off_diagonal_per_layer(pl)
 
     fig = plot_layer_orthogonality(layer_scores_A, method_name=method_name)
-    fig.savefig(os.path.join(output_dir, f'{method_name}_layer_orthogonality_A.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_layer_orthogonality_A.pdf'))
     plt.close(fig)
     print("Saved layer-wise A-matrix orthogonality plot.")
 
@@ -108,13 +108,13 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     fig = plot_ab_layer_orthogonality(
         layer_scores_A['cosine'], layer_scores_AB, method_name=method_name
     )
-    fig.savefig(os.path.join(output_dir, f'{method_name}_layer_orthogonality_AB.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_layer_orthogonality_AB.pdf'))
     plt.close(fig)
     print("Saved layer-wise A vs B@A cosine plot.")
 
     # ── 6: Per-module heatmaps — all 3 A-matrix metrics ──────────────────────
     fig = plot_module_orthogonality(layer_scores_A, method_name=method_name)
-    fig.savefig(os.path.join(output_dir, f'{method_name}_module_orthogonality.png'), dpi=150)
+    fig.savefig(os.path.join(output_dir, f'{method_name}_module_orthogonality.pdf'))
     plt.close(fig)
     print("Saved per-module orthogonality plot.")
 
