@@ -25,6 +25,17 @@ def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> float:
     return (a_f @ b_f / denom).item()
 
 
+def gram_frobenius_delta(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Frobenius norm of the Gram matrix for B@A product matrices.
+
+    For ΔW = B@A of shape (fan_out, fan_in), G = ΔW_i @ ΔW_j.T has shape
+    (fan_out, fan_out). Returns the raw ||G||_F without normalization.
+    In [0, inf); 0 = perfectly orthogonal weight updates.
+    """
+    G = a.float() @ b.float().T
+    return torch.norm(G, p='fro').item()
+
+
 def gram_frobenius(a: torch.Tensor, b: torch.Tensor) -> float:
     """Normalized Frobenius norm of the Gram matrix G = a @ b.T.
 
@@ -66,15 +77,17 @@ def max_principal_cos(a: torch.Tensor, b: torch.Tensor) -> float:
 
 
 METRICS = {
-    'cosine':    cosine_sim,
-    'frobenius': gram_frobenius,
-    'principal': max_principal_cos,
+    'cosine':        cosine_sim,
+    'frobenius':     gram_frobenius,
+    'principal':     max_principal_cos,
+    'frobenius_ab':  gram_frobenius_delta,
 }
 
 METRIC_LABELS = {
-    'cosine':    'Cosine similarity (flattened)',
-    'frobenius': 'Gram Frobenius norm / r',
-    'principal': 'Max principal angle cosine',
+    'cosine':        'Cosine similarity (flattened)',
+    'frobenius':     'Gram Frobenius norm / r',
+    'principal':     'Max principal angle cosine',
+    'frobenius_ab':  'Gram Frobenius norm (B@A)',
 }
 
 

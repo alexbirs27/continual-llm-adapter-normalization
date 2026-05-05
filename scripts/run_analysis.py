@@ -42,6 +42,7 @@ from src.analysis.per_layer_analysis import (
 )
 
 ALL_METRICS = ['cosine', 'frobenius', 'principal']
+AB_METRICS  = ['cosine', 'frobenius_ab']
 
 
 def run_analysis(adapters: dict, method_name: str, task_names: list,
@@ -62,15 +63,16 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     plt.close(fig)
     print("Saved task-pair A-matrix similarity heatmaps.")
 
-    # ── 2: B@A product cosine heatmap ─────────────────────────────────────────
-    sim_AB = task_similarity_matrix(adapters, mode='AB', metric='cosine')
-    fig, ax = plt.subplots(figsize=(5, 4))
-    fig.suptitle(f'{method_name} — task-pair cosine similarity (B@A product)')
-    plot_similarity_heatmap(sim_AB, 'B@A cosine', task_names, ax=ax)
+    # ── 2: B@A product heatmaps ───────────────────────────────────────────────
+    sim_AB = {m: task_similarity_matrix(adapters, mode='AB', metric=m) for m in AB_METRICS}
+    fig, axes = plt.subplots(1, len(AB_METRICS), figsize=(6 * len(AB_METRICS), 4))
+    fig.suptitle(f'{method_name} — task-pair similarity (B@A product)')
+    for ax, metric in zip(axes, AB_METRICS):
+        plot_similarity_heatmap(sim_AB[metric], METRIC_LABELS[metric], task_names, ax=ax)
     plt.tight_layout()
     fig.savefig(os.path.join(output_dir, f'{method_name}_task_similarity_AB.png'), dpi=150)
     plt.close(fig)
-    print("Saved task-pair B@A cosine heatmap.")
+    print("Saved task-pair B@A heatmaps.")
 
     # ── 3: Task-pair similarity heatmaps for all 3 B-matrix metrics ───────────
     sim_B = {}
@@ -97,9 +99,11 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     plt.close(fig)
     print("Saved layer-wise A-matrix orthogonality plot.")
 
-    # ── 5: Layer-wise A vs AB (cosine only, for direct comparison) ────────────
-    pl_AB = per_layer_similarity(adapters, mode='AB', metric='cosine')
-    layer_scores_AB = average_off_diagonal_per_layer(pl_AB)
+    # ── 5: Layer-wise A vs AB (cosine + frobenius_ab) ─────────────────────────
+    layer_scores_AB = {}
+    for metric in AB_METRICS:
+        pl_AB = per_layer_similarity(adapters, mode='AB', metric=metric)
+        layer_scores_AB[metric] = average_off_diagonal_per_layer(pl_AB)
 
     fig = plot_ab_layer_orthogonality(
         layer_scores_A['cosine'], layer_scores_AB, method_name=method_name
@@ -115,10 +119,10 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
     print("Saved per-module orthogonality plot.")
 
     # ── 7: Summary statistics ─────────────────────────────────────────────────
-    stats_A = {metric: summary_stats(sim_A[metric]) for metric in ALL_METRICS}
-    stats_B = {metric: summary_stats(sim_B[metric]) for metric in ALL_METRICS}
-    stats_AB = summary_stats(sim_AB)
-    print_summary(method_name, stats_A, stats_AB)
+    stats_A  = {metric: summary_stats(sim_A[metric]) for metric in ALL_METRICS}
+    stats_B  = {metric: summary_stats(sim_B[metric]) for metric in ALL_METRICS}
+    stats_AB = {metric: summary_stats(sim_AB[metric]) for metric in AB_METRICS}
+    print_summary(method_name, stats_A, stats_AB['cosine'])
 
     results = {
         'method':     method_name,
@@ -139,9 +143,12 @@ def run_analysis(adapters: dict, method_name: str, task_names: list,
             for metric in ALL_METRICS
         },
         'AB_product': {
-            'sim_matrix':   sim_AB.tolist(),
-            'summary':      stats_AB,
-            'layer_scores': {k: float(v) for k, v in layer_scores_AB.items()},
+            metric: {
+                'sim_matrix':   sim_AB[metric].tolist(),
+                'summary':      stats_AB[metric],
+                'layer_scores': {k: float(v) for k, v in layer_scores_AB[metric].items()},
+            }
+            for metric in AB_METRICS
         },
     }
     out_path = os.path.join(output_dir, f'{method_name}_analysis.json')

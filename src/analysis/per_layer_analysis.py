@@ -137,22 +137,39 @@ def plot_module_orthogonality(scores_per_metric: dict, method_name: str = ''):
     return fig
 
 
-def plot_ab_layer_orthogonality(scores_A: dict, scores_AB: dict, method_name: str = ''):
-    """Line plot comparing A-level vs AB-product cosine similarity per layer."""
-    layers_A  = _sorted_layers(scores_A)
-    layers_AB = _sorted_layers(scores_AB)
+def plot_ab_layer_orthogonality(scores_A_cosine: dict, scores_AB: dict, method_name: str = ''):
+    """Line plot comparing A cosine vs B@A product metrics per layer.
+
+    Args:
+        scores_A_cosine: {layer_name: float} — A matrix cosine similarity
+        scores_AB:       {metric_name: {layer_name: float}} — B@A metrics
+    """
+    from src.analysis.orthogonality import METRIC_LABELS
+
+    def _avg_by_layer(scores):
+        layer_vals = defaultdict(list)
+        for k, v in scores.items():
+            layer_vals[layer_index(k)].append(v)
+        idxs = sorted(layer_vals.keys())
+        return idxs, [float(np.mean(layer_vals[idx])) for idx in idxs]
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot([layer_index(k) for k, _ in layers_A],  [v for _, v in layers_A],
-            marker='o', label='A matrices (cosine)', linewidth=1.5)
-    ax.plot([layer_index(k) for k, _ in layers_AB], [v for _, v in layers_AB],
-            marker='s', label='B@A product (cosine)', linewidth=1.5, linestyle='--')
+
+    idxs, vals = _avg_by_layer(scores_A_cosine)
+    ax.plot(idxs, vals, marker='o', label='A matrices (cosine)', linewidth=1.5)
+
+    markers = ['s', '^', 'D']
+    linestyles = ['--', ':', '-.']
+    for (marker, ls), (metric, scores) in zip(zip(markers, linestyles), scores_AB.items()):
+        idxs, vals = _avg_by_layer(scores)
+        ax.plot(idxs, vals, marker=marker, linestyle=ls,
+                label=f'B@A ({METRIC_LABELS[metric]})', linewidth=1.5)
+
     ax.axhline(0, color='grey', linestyle=':', linewidth=0.8, label='Perfect orthogonality')
     ax.set_xlabel('Layer index')
-    ax.set_ylabel('Mean inter-task cosine similarity')
+    ax.set_ylabel('Mean inter-task similarity')
     ax.set_title(f'Layer-wise orthogonality — {method_name}')
-    ax.legend()
-    ax.set_ylim(-0.05, 1.05)
+    ax.legend(fontsize=8)
     return fig
 
 
